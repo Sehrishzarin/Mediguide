@@ -3,6 +3,8 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./src/config/db');
 const healthRoutes = require('./src/routes/health.routes');
+const authRoutes = require('./src/routes/auth.routes');
+const organizationRoutes = require('./src/routes/organization.routes');
 
 // Load environment variables
 dotenv.config();
@@ -17,6 +19,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api', healthRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/organizations', organizationRoutes);
 
 // Root route
 app.get('/', (req, res) => {
@@ -30,8 +34,8 @@ const startServer = async () => {
     await connectDB();
   }
 
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://localhost:${PORT} and network interfaces on port ${PORT}`);
   });
 };
 
