@@ -48,6 +48,18 @@ export const getCurrentUserProfile = async (token) => {
   return await response.json();
 };
 
+export const updateUserProfile = async (token, profileData) => {
+  const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(profileData)
+  });
+  return await response.json();
+};
+
 // Organization & Map API Calls
 export const fetchOrganizations = async (type = '', search = '') => {
   const params = new URLSearchParams();

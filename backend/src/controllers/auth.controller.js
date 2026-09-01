@@ -12,7 +12,8 @@ const fallbackUsers = [
     passwordHash: '$2a$10$w09CgqP7vS6X5q0gHk6r7u.3aVj7aV0a9a0a0a0a0a0a0a0a0a0a0', // adminpassword123
     plainPassword: 'adminpassword123',
     role: 'admin',
-    phone: '+1 800-555-0199'
+    phone: '+1 800-555-0199',
+    medicalProfile: {}
   },
   {
     _id: 'mock_user_id_2',
@@ -21,7 +22,28 @@ const fallbackUsers = [
     passwordHash: '$2a$10$w09CgqP7vS6X5q0gHk6r7u.3aVj7aV0a9a0a0a0a0a0a0a0a0a0a0', // userpassword123
     plainPassword: 'userpassword123',
     role: 'user',
-    phone: '+1 555-0143'
+    phone: '+1 555-0143',
+    medicalProfile: {
+      bloodGroup: 'O+',
+      gender: 'Female',
+      dateOfBirth: '1995-06-15',
+      height: 165,
+      weight: 62,
+      allergies: ['Penicillin', 'Peanuts'],
+      preExistingConditions: ['Asthma', 'Mild Hypertension'],
+      currentMedications: [
+        { name: 'Albuterol Inhaler', dosage: '2 puffs', frequency: 'As needed' },
+        { name: 'Lisinopril', dosage: '10mg', frequency: 'Once daily' }
+      ],
+      longTermTreatments: [
+        { treatmentName: 'Immunotherapy / Allergy Shots', notes: 'Monthly maintenance dose', isOngoing: true }
+      ],
+      emergencyContact: {
+        name: 'Robert Doe',
+        relationship: 'Spouse',
+        phone: '+1 555-0199'
+      }
+    }
   }
 ];
 
@@ -50,7 +72,8 @@ const sendTokenResponse = (userObj, statusCode, res) => {
       name: userObj.name,
       email: userObj.email,
       role: userObj.role,
-      phone: userObj.phone || ''
+      phone: userObj.phone || '',
+      medicalProfile: userObj.medicalProfile || {}
     }
   });
 };
@@ -78,7 +101,8 @@ exports.register = async (req, res) => {
         email,
         password,
         role: assignedRole,
-        phone: phone || ''
+        phone: phone || '',
+        medicalProfile: {}
       });
 
       return sendTokenResponse(user, 201, res);
@@ -99,7 +123,8 @@ exports.register = async (req, res) => {
       email,
       plainPassword: password,
       role: assignedRole,
-      phone: phone || ''
+      phone: phone || '',
+      medicalProfile: {}
     };
 
     fallbackUsers.push(newUser);
@@ -150,7 +175,6 @@ exports.login = async (req, res) => {
     // Standby Fallback Mode (MongoDB Offline)
     const fallbackUser = fallbackUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
     
-    // Check if password matches plainPassword or default test passwords
     if (
       fallbackUser && 
       (fallbackUser.plainPassword === password || password === 'adminpassword123' || password === 'userpassword123')
@@ -158,13 +182,14 @@ exports.login = async (req, res) => {
       return sendTokenResponse(fallbackUser, 200, res);
     }
 
-    // If user typed credentials, let them log in seamlessly in demo mode
+    // Demo mode fallback
     const demoUser = {
       _id: 'demo_user_' + Date.now(),
       name: email.split('@')[0],
       email: email,
       role: email.includes('admin') ? 'admin' : email.includes('org') ? 'organization' : 'user',
-      phone: ''
+      phone: '',
+      medicalProfile: {}
     };
 
     return sendTokenResponse(demoUser, 200, res);
@@ -191,14 +216,67 @@ exports.getMe = async (req, res) => {
       }
     }
 
-    // Fallback mode response
+    const fallbackUser = fallbackUsers.find(u => u._id === req.user.id || u.email === req.user.email);
+
     res.status(200).json({
       success: true,
       data: {
         id: req.user.id,
         name: req.user.name || 'MediGuide User',
         email: req.user.email || 'user@mediguide.com',
-        role: req.user.role || 'user'
+        role: req.user.role || 'user',
+        medicalProfile: fallbackUser?.medicalProfile || req.user.medicalProfile || {}
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// @desc    Update user medical profile
+// @route   PUT /api/auth/profile
+// @access  Private
+exports.updateMedicalProfile = async (req, res) => {
+  try {
+    const { medicalProfile, name, phone } = req.body;
+
+    if (mongoose.connection.readyState === 1) {
+      const updatedUser = await User.findByIdAndUpdate(
+        req.user.id,
+        {
+          ...(name && { name }),
+          ...(phone && { phone }),
+          ...(medicalProfile && { medicalProfile })
+        },
+        { new: true, runValidators: true }
+      );
+
+      return res.status(200).json({
+        success: true,
+        data: updatedUser
+      });
+    }
+
+    // Standby Fallback Update
+    const fallbackUser = fallbackUsers.find(u => u._id === req.user.id || u.email === req.user.email);
+    if (fallbackUser) {
+      if (name) fallbackUser.name = name;
+      if (phone) fallbackUser.phone = phone;
+      if (medicalProfile) fallbackUser.medicalProfile = medicalProfile;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: req.user.id,
+        name: name || req.user.name,
+        email: req.user.email,
+        role: req.user.role,
+        phone: phone || req.user.phone,
+        medicalProfile: medicalProfile || req.user.medicalProfile
       }
     });
   } catch (error) {

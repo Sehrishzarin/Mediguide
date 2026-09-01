@@ -5,6 +5,7 @@ import AuthWall from './components/AuthWall';
 import AdminPortal from './components/AdminPortal';
 import OrganizationPortal from './components/OrganizationPortal';
 import NavigationDrawer from './components/NavigationDrawer';
+import MedicalProfileEditor from './components/MedicalProfileEditor';
 import './App.css';
 
 function MainApp() {
@@ -208,19 +209,7 @@ function MainApp() {
         )}
 
         {activeTab === 'profile' && (
-          <section className="section">
-            <h3 className="page-title">Patient Profile</h3>
-            <div className="profile-card">
-              <div className="avatar-large">
-                {user.name.substring(0, 2).toUpperCase()}
-              </div>
-              <h4>{user.name}</h4>
-              <p>{user.email}</p>
-              <div className="role-tag-large">PATIENT ACCOUNT</div>
-
-              <button className="btn-logout" onClick={logout}>Sign Out</button>
-            </div>
-          </section>
+          <MedicalProfileEditor />
         )}
       </main>
 

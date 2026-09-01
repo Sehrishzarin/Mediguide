@@ -1,5 +1,5 @@
 import { createContext, useState, useEffect, useContext } from 'react';
-import { loginUser, registerUser, getCurrentUserProfile } from '../services/api';
+import { loginUser, registerUser, getCurrentUserProfile, updateUserProfile } from '../services/api';
 
 const AuthContext = createContext();
 
@@ -45,6 +45,15 @@ export const AuthProvider = ({ children }) => {
     return res;
   };
 
+  const updateProfile = async (profileData) => {
+    if (!token) return { success: false, message: 'Not authenticated' };
+    const res = await updateUserProfile(token, profileData);
+    if (res.success) {
+      setUser(res.data);
+    }
+    return res;
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     setToken('');
@@ -52,7 +61,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, role: user?.role || 'guest', loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, role: user?.role || 'guest', loading, login, register, updateProfile, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -33,6 +33,34 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  medicalProfile: {
+    bloodGroup: {
+      type: String,
+      enum: ['', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'],
+      default: ''
+    },
+    gender: { type: String, default: '' },
+    dateOfBirth: { type: String, default: '' },
+    height: { type: Number, default: 0 },
+    weight: { type: Number, default: 0 },
+    allergies: [{ type: String }],
+    preExistingConditions: [{ type: String }],
+    currentMedications: [{
+      name: { type: String },
+      dosage: { type: String },
+      frequency: { type: String }
+    }],
+    longTermTreatments: [{
+      treatmentName: { type: String },
+      notes: { type: String },
+      isOngoing: { type: Boolean, default: true }
+    }],
+    emergencyContact: {
+      name: { type: String, default: '' },
+      relationship: { type: String, default: '' },
+      phone: { type: String, default: '' }
+    }
+  },
   createdAt: {
     type: Date,
     default: Date.now
