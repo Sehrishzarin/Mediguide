@@ -1,0 +1,8 @@
+/* ── Spinner ───────────────────────────────────────────────── */
+.spinner { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.sm { width: 1rem; height: 1rem; }
+.md { width: 1.5rem; height: 1.5rem; }
+.lg { width: 2rem; height: 2rem; }
+.circle { opacity: 0.25; }
+.path { opacity: 0.75; }

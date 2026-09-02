@@ -1,38 +1,37 @@
-import { useState, useEffect } from 'react';
-import { checkHealth } from './services/api';
-import './App.css';
+import { Routes, Route } from 'react-router-dom';
+import Home from './pages/Home';
+import OrgOnboarding from './pages/org/OrgOnboarding';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import { PatientProvider } from './pages/patient/PatientContext';
+import PatientSignup from './pages/patient/PatientSignup';
+import PatientLogin from './pages/patient/PatientLogin';
+import PatientLayout from './pages/patient/PatientLayout';
+import PatientHome from './pages/patient/PatientHome';
+import PatientProfile from './pages/patient/PatientProfile';
+import SymptomInput from './pages/patient/SymptomInput';
+import TriageResult from './pages/patient/TriageResult';
+import AvailableSlots from './pages/patient/AvailableSlots';
+import Emergency from './pages/patient/Emergency';
 
 function App() {
-  const [backendStatus, setBackendStatus] = useState('Checking connection...');
-
-  useEffect(() => {
-    checkHealth()
-      .then((data) => {
-        if (data.status === 'success') {
-          setBackendStatus(`Connected to Backend (${data.message})`);
-        } else {
-          setBackendStatus('Backend reachable, unexpected response.');
-        }
-      })
-      .catch(() => {
-        setBackendStatus('Disconnected from Backend (Ensure Node server is running on port 5000)');
-      });
-  }, []);
-
   return (
-    <div className="container">
-      <h1>MediGuide Mobile App</h1>
-      <p className="subtitle">React + Node.js + Express + MongoDB Baseline</p>
-      
-      <div className="card">
-        <h2>Backend Connectivity</h2>
-        <p className="status-badge">{backendStatus}</p>
-      </div>
-
-      <p className="footer-note">
-        Ready for Capacitor mobile initialization (iOS / Android build target).
-      </p>
-    </div>
+    <PatientProvider>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/org/onboard" element={<OrgOnboarding />} />
+        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/patient/signup" element={<PatientSignup />} />
+        <Route path="/patient/login" element={<PatientLogin />} />
+        <Route path="/patient" element={<PatientLayout />}>
+          <Route path="home" element={<PatientHome />} />
+          <Route path="profile" element={<PatientProfile />} />
+          <Route path="triage" element={<SymptomInput />} />
+          <Route path="triage/result" element={<TriageResult />} />
+          <Route path="slots" element={<AvailableSlots />} />
+          <Route path="emergency" element={<Emergency />} />
+        </Route>
+      </Routes>
+    </PatientProvider>
   );
 }
 

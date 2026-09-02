@@ -1,0 +1,46 @@
+/* ── Shared Org Form Styles ────────────────────────────────── */
+.wrapper { max-width: 28rem; margin: 0 auto; }
+.heading { font-size: 1.5rem; font-weight: 600; color: #1f2937; margin-bottom: 0.25rem; }
+.subtext { color: #6b7280; margin-bottom: 1.5rem; }
+.form { display: flex; flex-direction: column; gap: 1rem; }
+.field { display: flex; flex-direction: column; }
+.label { font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.25rem; }
+.input, .select { width: 100%; border: 1px solid #d1d5db; border-radius: 0.5rem; padding: 0.5rem 0.75rem; color: #1f2937; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+.input:focus, .select:focus { border-color: #0d9488; box-shadow: 0 0 0 2px rgba(13,148,136,0.2); }
+.select { background: #fff; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.errorMsg { font-size: 0.875rem; color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; border-radius: 0.75rem; padding: 0.5rem 0.75rem; }
+.btnRow { display: flex; gap: 0.75rem; padding-top: 0.5rem; }
+.btnBack { flex: 1; border: 1px solid #d1d5db; color: #374151; font-weight: 500; border-radius: 0.5rem; padding: 0.625rem; background: #fff; transition: background 0.2s; }
+.btnBack:hover { background: #f9fafb; }
+.btnPrimary { flex: 1; background: #0d9488; color: #fff; font-weight: 500; border-radius: 0.75rem; padding: 0.625rem; border: none; transition: background 0.2s; }
+.btnPrimary:hover { background: #0f766e; }
+.btnPrimary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.dropzone { display: flex; flex-direction: column; align-items: center; justify-content: center; border: 2px dashed #d1d5db; border-radius: 0.5rem; padding: 2rem; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+.dropzone:hover { border-color: #0d9488; background: rgba(240,253,250,0.3); }
+.dropzoneSvg { width: 2rem; height: 2rem; color: #9ca3af; margin-bottom: 0.5rem; }
+.dropzoneText { font-size: 0.875rem; color: #6b7280; }
+.hiddenInput { display: none; }
+.fileList { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.fileItem { display: flex; align-items: center; justify-content: space-between; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.875rem; }
+.fileName { color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.removeBtn { color: #dc2626; font-size: 0.75rem; font-weight: 500; margin-left: 0.75rem; background: none; border: none; }
+.removeBtn:hover { color: #b91c1c; }
+.uploadedList { margin-top: 1rem; }
+.uploadedLabel { font-size: 0.75rem; color: #6b7280; margin-bottom: 0.25rem; }
+.uploadedItems { display: flex; flex-direction: column; gap: 0.25rem; }
+.uploadedItem { font-size: 0.875rem; color: #15803d; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 0.5rem; padding: 0.375rem 0.75rem; }
+
+.staffWrapper { max-width: 32rem; margin: 0 auto; }
+.staffEntries { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem; }
+.staffEntry { display: flex; gap: 0.5rem; align-items: flex-start; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 0.75rem; background: #f9fafb; }
+.removeRowBtn { margin-top: 0.25rem; color: #f87171; background: none; border: none; padding: 0.25rem; }
+.removeRowBtn:hover { color: #dc2626; }
+.removeRowSvg { width: 1.25rem; height: 1.25rem; }
+.addRowBtn { font-size: 0.875rem; color: #0d9488; font-weight: 500; margin-bottom: 0.5rem; background: none; border: none; }
+.addRowBtn:hover { color: #0f766e; }
+.addedList { margin-top: 0.75rem; }
+.addedLabel { font-size: 0.75rem; color: #6b7280; margin-bottom: 0.25rem; }
+.addedItems { display: flex; flex-direction: column; gap: 0.25rem; }
+.addedItem { font-size: 0.875rem; color: #15803d; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 0.5rem; padding: 0.375rem 0.75rem; }
