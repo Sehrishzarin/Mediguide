@@ -1,0 +1,62 @@
+/* ── Emergency ─────────────────────────────────────────────── */
+
+.container { max-width: 32rem; margin: 0 auto; padding: 1.5rem 1rem; }
+.emergencyHeader { text-align: center; margin-bottom: 2rem; }
+.headerCircle { width: 3.5rem; height: 3.5rem; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.75rem; }
+.headerSvg { width: 1.75rem; height: 1.75rem; color: #dc2626; }
+.headerTitle { font-size: 1.5rem; font-weight: 700; color: #991b1b; }
+.headerSubtext { font-size: 0.875rem; color: #dc2626; margin-top: 0.25rem; }
+
+.ambulanceCard { background: #fef2f2; border: 1px solid #fecaca; border-radius: 1rem; padding: 1.25rem; margin-bottom: 1.25rem; }
+.sectionHeading { font-weight: 600; color: #1f2937; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+.sectionHeadingSvg { width: 1.25rem; height: 1.25rem; color: #dc2626; }
+.sectionDesc { font-size: 0.875rem; color: #4b5563; margin-bottom: 1rem; }
+
+.btnDanger { width: 100%; background: #dc2626; color: #fff; font-weight: 600; border-radius: 0.75rem; padding: 0.875rem; border: none; transition: background 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+.btnDanger:hover { background: #b91c1c; }
+.btnDanger:disabled { opacity: 0.5; cursor: not-allowed; }
+.btnSvg { width: 1.25rem; height: 1.25rem; }
+.spinSvg { width: 1.25rem; height: 1.25rem; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.errorText { font-size: 0.875rem; color: #dc2626; background: #fee2e2; border-radius: 0.5rem; padding: 0.5rem 0.75rem; margin-top: 0.75rem; }
+
+.modalOverlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); padding: 1rem; }
+.modalCard { background: #fff; border-radius: 1rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); max-width: 24rem; width: 100%; padding: 1.5rem; text-align: center; }
+.modalSuccessCircle { width: 4rem; height: 4rem; background: #dcfce7; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; }
+.modalSuccessSvg { width: 2rem; height: 2rem; color: #16a34a; }
+.modalTitle { font-size: 1.25rem; font-weight: 700; color: #1f2937; margin-bottom: 0.5rem; }
+.modalSubtext { color: #4b5563; margin-bottom: 0.25rem; }
+.modalEta { font-size: 2.25rem; font-weight: 700; color: #dc2626; margin-bottom: 1rem; }
+.modalEtaUnit { font-size: 1.125rem; font-weight: 500; color: #6b7280; }
+.modalNote { font-size: 0.75rem; color: #9ca3af; margin-bottom: 1.25rem; }
+.modalCloseBtn { width: 100%; background: #f3f4f6; color: #374151; font-weight: 500; border-radius: 0.75rem; padding: 0.75rem; border: none; transition: background 0.2s; }
+.modalCloseBtn:hover { background: #e5e7eb; }
+
+.contactCard { background: #fff; border: 1px solid #e5e7eb; border-radius: 1rem; padding: 1.25rem; }
+.savedContact { margin-bottom: 0.75rem; }
+.savedBadge { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 0.75rem; padding: 0.75rem; margin-bottom: 0.75rem; }
+.savedLabel { font-size: 0.75rem; color: #16a34a; font-weight: 500; margin-bottom: 0.125rem; }
+.savedNumber { font-size: 1.125rem; font-weight: 600; color: #1f2937; }
+.callBtn { display: block; width: 100%; background: #dc2626; color: #fff; text-align: center; font-weight: 600; border-radius: 0.75rem; padding: 0.875rem; transition: background 0.2s; }
+.callBtn:hover { background: #b91c1c; }
+.savedMsg { font-size: 0.75rem; color: #16a34a; text-align: center; margin-top: 0.5rem; }
+
+.btnDangerOutline { width: 100%; border: 2px solid #fca5a5; color: #b91c1c; font-weight: 600; border-radius: 0.75rem; padding: 0.875rem; background: transparent; transition: background 0.2s; }
+.btnDangerOutline:hover { background: #fef2f2; }
+
+.loadingRow { display: flex; align-items: center; justify-content: center; padding: 1rem; font-size: 0.875rem; color: #6b7280; gap: 0.5rem; }
+
+.contactForm { margin-bottom: 0.75rem; }
+.contactFormText { font-size: 0.875rem; color: #6b7280; margin-bottom: 0.75rem; }
+.contactFormFields { display: flex; flex-direction: column; gap: 0.75rem; }
+.input { width: 100%; border: 1px solid #d1d5db; border-radius: 0.5rem; padding: 0.625rem 0.75rem; color: #1f2937; outline: none; }
+.input:focus { border-color: #dc2626; box-shadow: 0 0 0 2px rgba(220,38,38,0.2); }
+.btnDangerSm { width: 100%; background: #dc2626; color: #fff; font-weight: 600; border-radius: 0.75rem; padding: 0.75rem; border: none; transition: background 0.2s; }
+.btnDangerSm:hover { background: #b91c1c; }
+.btnDangerSm:disabled { opacity: 0.5; cursor: not-allowed; }
+.contactError { font-size: 0.875rem; color: #dc2626; background: #fef2f2; border-radius: 0.5rem; padding: 0.5rem 0.75rem; margin-top: 0.75rem; }
+
+.hotlineSection { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #f3f4f6; }
+.hotlineLabel { font-size: 0.75rem; color: #6b7280; margin-bottom: 0.5rem; }
+.hotlineLink { color: #0d9488; font-weight: 500; font-size: 0.875rem; }
+.hotlineLink:hover { color: #0f766e; }
