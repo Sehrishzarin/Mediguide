@@ -1,5 +1,95 @@
 // ============================================================
-// Mock Data — edit these in-memory objects to tweak fake data
+// API Base URL — reads from env or falls back to localhost
+// ============================================================
+
+const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  const hostname = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
+  return `http://${hostname}:5000/api`;
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
+// ============================================================
+// Health Check
+// ============================================================
+
+export const checkHealth = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/health`);
+    return await response.json();
+  } catch (error) {
+    console.error('Error reaching backend server:', error);
+    throw error;
+  }
+};
+
+// ============================================================
+// Auth API Calls (real backend)
+// ============================================================
+
+export const loginUser = async (email, password) => {
+  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  return await response.json();
+};
+
+export const registerUser = async (userData) => {
+  const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(userData)
+  });
+  return await response.json();
+};
+
+export const getCurrentUserProfile = async (token) => {
+  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return await response.json();
+};
+
+export const updateUserProfile = async (token, profileData) => {
+  const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(profileData)
+  });
+  return await response.json();
+};
+
+// ============================================================
+// Organization & Map API Calls (real backend)
+// ============================================================
+
+export const fetchOrganizations = async (type = '', search = '') => {
+  const params = new URLSearchParams();
+  if (type) params.append('type', type);
+  if (search) params.append('search', search);
+
+  const response = await fetch(`${API_BASE_URL}/organizations?${params.toString()}`);
+  return await response.json();
+};
+
+export const fetchNearbyOrganizations = async (lat, lng, distance = 10) => {
+  const response = await fetch(`${API_BASE_URL}/organizations/nearby?lat=${lat}&lng=${lng}&distance=${distance}`);
+  return await response.json();
+};
+
+// ============================================================
+// Mock Data — used by patient pages (frontend-only)
 // ============================================================
 
 let mockUsers = [
@@ -66,7 +156,7 @@ let mockReports = [
 ];
 
 // ============================================================
-// Helpers
+// Mock Helpers
 // ============================================================
 
 const delay = (ms = 300) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -75,7 +165,7 @@ let nextId = 100;
 const genId = (prefix = 'id') => `${prefix}${nextId++}`;
 
 // ============================================================
-// API Functions (mocked)
+// Mock API Functions (used by patient pages)
 // ============================================================
 
 export const signup = async (email, password, role) => {
@@ -281,11 +371,11 @@ export const uploadTestReport = async (file) => {
   return { report };
 };
 
-let mockEmergencyContact = null; // user's saved personal emergency contact
+let mockEmergencyContact = null;
 
 export const requestAmbulance = async () => {
   await delay();
-  const eta = Math.floor(Math.random() * 15) + 5; // 5–19 minutes
+  const eta = Math.floor(Math.random() * 15) + 5;
   return { eta };
 };
 
@@ -307,10 +397,4 @@ export const updateEmergencyContact = async (number) => {
   await delay();
   mockEmergencyContact = { number, savedAt: new Date().toISOString() };
   return { contact: { ...mockEmergencyContact } };
-};
-
-// Keep the original health check for backward compatibility
-export const checkHealth = async () => {
-  await delay();
-  return { status: 'success', message: 'Mock API — no backend required' };
 };
