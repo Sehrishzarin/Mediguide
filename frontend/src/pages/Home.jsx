@@ -148,8 +148,11 @@ function Home() {
             <Link to="/patient/signup" className={styles.btnPrimary}>
               Get Started as Patient
             </Link>
+            <Link to="/login" className={styles.btnOutline}>
+              Sign In / Log In
+            </Link>
             <Link to="/org/onboard" className={styles.btnOutline}>
-              Register Your Organization
+              Register Organization
             </Link>
           </div>
         </div>

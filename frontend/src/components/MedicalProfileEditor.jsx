@@ -11,6 +11,7 @@ export default function MedicalProfileEditor() {
   // Bio-Data State
   const [bloodGroup, setBloodGroup] = useState('');
   const [gender, setGender] = useState('');
+  const [pregnancyStatus, setPregnancyStatus] = useState('N/A');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [height, setHeight] = useState('');
   const [weight, setWeight] = useState('');
@@ -38,6 +39,7 @@ export default function MedicalProfileEditor() {
       const p = user.medicalProfile;
       setBloodGroup(p.bloodGroup || '');
       setGender(p.gender || '');
+      setPregnancyStatus(p.pregnancyStatus || 'N/A');
       setDateOfBirth(p.dateOfBirth || '');
       setHeight(p.height || '');
       setWeight(p.weight || '');
@@ -105,6 +107,7 @@ export default function MedicalProfileEditor() {
       medicalProfile: {
         bloodGroup,
         gender,
+        pregnancyStatus,
         dateOfBirth,
         height: Number(height) || 0,
         weight: Number(weight) || 0,

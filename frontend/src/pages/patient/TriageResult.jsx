@@ -16,14 +16,14 @@ function TriageResult() {
     );
   }
 
-  const { query, category, specialty, urgency_level } = state;
+  const { query, category, specialty, urgency_level, reasoning, precautionary_advice } = state;
   const isHighUrgency = urgency_level === 'high';
   const specialtyLabel = SPECIALTY_LABELS[specialty] || specialty;
 
   return (
     <div className={styles.container}>
-      <h1 className={styles.heading}>Consultation result</h1>
-      <p className={styles.subtext}>Based on the symptoms you described.</p>
+      <h1 className={styles.heading}>AI Consultation Result</h1>
+      <p className={styles.subtext}>Evaluated based on your symptoms & medical profile context.</p>
 
       <div className={styles.chatArea}>
         <div className={styles.userRow}>
@@ -38,9 +38,19 @@ function TriageResult() {
           </div>
           <div className={isHighUrgency ? styles.resultBubbleUrgent : styles.resultBubbleNormal}>
             <p className={styles.resultText}>
-              You seem to have a <span className={styles.bold}>{category}</span>.<br />
-              I recommend seeing a <span className={styles.bold}>{specialtyLabel}</span>.
+              Problem Area: <span className={styles.bold}>{category}</span>.<br />
+              Recommended Care: Visit a <span className={styles.bold}>{specialtyLabel}</span>.
             </p>
+            {reasoning && (
+              <p className={styles.resultText} style={{ marginTop: '8px', fontSize: '13px', opacity: 0.9 }}>
+                💡 <strong>AI Analysis:</strong> {reasoning}
+              </p>
+            )}
+            {precautionary_advice && (
+              <p className={styles.resultText} style={{ marginTop: '6px', fontSize: '13px', opacity: 0.9 }}>
+                🛡️ <strong>Guidance:</strong> {precautionary_advice}
+              </p>
+            )}
             <div className={styles.badgeWrap}>
               <span className={isHighUrgency ? styles.badgeHigh : urgency_level === 'medium' ? styles.badgeMedium : styles.badgeLow}>
                 {isHighUrgency ? 'High urgency' : urgency_level === 'medium' ? 'Medium urgency' : 'Low urgency'}
@@ -50,7 +60,7 @@ function TriageResult() {
         </div>
 
         <div className={styles.disclaimer}>
-          <strong className={styles.disclaimerBold}>Disclaimer:</strong> This is guidance, not a diagnosis. If your symptoms worsen or you feel unsafe, please seek immediate medical attention.
+          <strong className={styles.disclaimerBold}>Safety Disclaimer:</strong> This AI assistant provides triage & specialist navigation only. It does not provide medical disease diagnoses or prescriptions.
         </div>
       </div>
 

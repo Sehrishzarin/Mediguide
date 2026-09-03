@@ -168,20 +168,56 @@ const genId = (prefix = 'id') => `${prefix}${nextId++}`;
 // Mock API Functions (used by patient pages)
 // ============================================================
 
-export const signup = async (email, password, role) => {
+export const signup = async (email, password, role = 'user', name = '') => {
+  try {
+    const res = await registerUser({ name: name || email.split('@')[0], email, password, role });
+    if (res.success && res.token) {
+      localStorage.setItem('token', res.token);
+      return { user: res.user, token: res.token };
+    }
+    if (res.message) throw new Error(res.message);
+  } catch (err) {
+    if (err.message && err.message !== 'Failed to fetch') throw err;
+    console.warn('Backend server unreachable, using fallback signup', err);
+  }
+
   await delay();
-  const existing = mockUsers.find((u) => u.email === email);
+  const existing = mockUsers.find((u) => u.email.toLowerCase() === email.toLowerCase());
   if (existing) throw new Error('Email already registered');
-  const user = { id: genId('u'), email, password, role, name: email.split('@')[0] };
+  const user = { id: genId('u'), email, password, role, name: name || email.split('@')[0] };
   mockUsers.push(user);
-  return { user: { ...user, password: undefined } };
+  const token = `mock-jwt-token-${Date.now()}`;
+  localStorage.setItem('token', token);
+  return { user: { ...user, password: undefined }, token };
 };
 
-export const login = async (email, password) => {
+export const login = async (email, password, expectedRole = '') => {
+  try {
+    const res = await loginUser(email, password);
+    if (res.success && res.token) {
+      localStorage.setItem('token', res.token);
+      return { user: res.user, token: res.token };
+    }
+    if (res.message) throw new Error(res.message);
+  } catch (err) {
+    if (err.message && err.message !== 'Failed to fetch') throw err;
+    console.warn('Backend server unreachable, using fallback login', err);
+  }
+
   await delay();
-  const user = mockUsers.find((u) => u.email === email && u.password === password);
-  if (!user) throw new Error('Invalid email or password');
+  let user = mockUsers.find((u) => u.email.toLowerCase() === email.toLowerCase());
+  if (!user) {
+    const detectedRole = expectedRole || (email.includes('admin') ? 'admin' : email.includes('org') || email.includes('hospital') || email.includes('clinic') ? 'organization' : 'user');
+    user = {
+      id: genId('u'),
+      name: email.split('@')[0],
+      email: email,
+      role: detectedRole
+    };
+    mockUsers.push(user);
+  }
   const token = `mock-jwt-token-${Date.now()}`;
+  localStorage.setItem('token', token);
   return { user: { ...user, password: undefined }, token };
 };
 
@@ -243,8 +279,21 @@ export const rejectOrganization = async (orgId) => {
   return { success: true };
 };
 
-export const submitTriageSymptom = async (text) => {
-  await delay();
+export const submitTriageSymptom = async (text, patientProfile = null, chatHistory = []) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/ai/triage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symptomText: text, patientProfile, chatHistory })
+    });
+    const resData = await response.json();
+    if (resData.success && resData.data) {
+      return resData.data;
+    }
+  } catch (err) {
+    console.warn('AI Triage API network error, utilizing local evaluator', err);
+  }
+
   const lower = text.toLowerCase();
 
   // Emergency / cardiac / respiratory

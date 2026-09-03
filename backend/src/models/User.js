@@ -33,6 +33,10 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  address: {
+    type: String,
+    default: ''
+  },
   medicalProfile: {
     bloodGroup: {
       type: String,
@@ -40,6 +44,7 @@ const UserSchema = new mongoose.Schema({
       default: ''
     },
     gender: { type: String, default: '' },
+    pregnancyStatus: { type: String, default: 'N/A' },
     dateOfBirth: { type: String, default: '' },
     height: { type: Number, default: 0 },
     weight: { type: Number, default: 0 },

@@ -26,6 +26,7 @@ const fallbackUsers = [
     medicalProfile: {
       bloodGroup: 'O+',
       gender: 'Female',
+      pregnancyStatus: 'Pregnant (2nd Trimester)',
       dateOfBirth: '1995-06-15',
       height: 165,
       weight: 62,
