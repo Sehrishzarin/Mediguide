@@ -34,6 +34,36 @@ const OrganizationSchema = new mongoose.Schema({
     type: [String],
     default: ['Emergency', 'General Checkup', 'Pharmacy']
   },
+  isPartner: {
+    type: Boolean,
+    default: true
+  },
+  allowAppBooking: {
+    type: Boolean,
+    default: true
+  },
+  reviews: [
+    {
+      patientId: { type: mongoose.Schema.ObjectId, ref: 'User' },
+      patientName: { type: String, required: true },
+      rating: { type: Number, required: true, min: 1, max: 5 },
+      comment: { type: String, required: true },
+      visitDate: { type: String, default: '' },
+      createdAt: { type: Date, default: Date.now }
+    }
+  ],
+  averageRating: {
+    type: Number,
+    default: 4.5
+  },
+  totalReviews: {
+    type: Number,
+    default: 0
+  },
+  googlePlaceId: {
+    type: String,
+    default: ''
+  },
   user: {
     type: mongoose.Schema.ObjectId,
     ref: 'User',

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { usePatient } from './PatientContext';
+import HospitalMap from '../../components/HospitalMap';
 import styles from './PatientHome.module.css';
 
 const ACTIONS = [
@@ -56,6 +57,10 @@ function PatientHome() {
     }
   }, []);
 
+  const handleSelectBooking = (org) => {
+    navigate('/patient/slots', { state: { specialty: org.type || 'General Physician', orgName: org.name } });
+  };
+
   return (
     <div className={styles.container}>
       <div className={styles.greeting}>
@@ -79,6 +84,11 @@ function PatientHome() {
             </div>
           </Link>
         ))}
+      </div>
+
+      {/* DUAL SOURCE HEALTHCARE MAP DIRECTLY ON FRONT SCREEN */}
+      <div style={{ marginTop: '1.5rem' }}>
+        <HospitalMap onSelectBooking={handleSelectBooking} />
       </div>
 
       {/* Recent Consultation Chats Section right on front screen */}

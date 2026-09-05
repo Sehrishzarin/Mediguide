@@ -25,7 +25,7 @@ function AvailableSlots() {
   const fetchSlots = async () => {
     setLoading(true); setError('');
     try { const { slots: results } = await api.getAvailableSlots(filterKey); setSlots(results); }
-    catch (err) { setError(err.message || 'Failed to load available slots.'); }
+    catch (err) { setError(err.message || 'Failed to load available sessions.'); }
     finally { setLoading(false); }
   };
 
@@ -34,7 +34,7 @@ function AvailableSlots() {
   const handleConfirm = async (slot) => {
     setConfirming(slot.id); setError('');
     try { const { booking } = await api.confirmBooking(slot.id); setBooked({ ...booking, org: slot.org }); }
-    catch (err) { setError(err.message || 'Could not confirm booking.'); await fetchSlots(); }
+    catch (err) { setError(err.message || 'Could not confirm session booking.'); await fetchSlots(); }
     finally { setConfirming(null); }
   };
 
@@ -46,9 +46,9 @@ function AvailableSlots() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
           </svg>
         </div>
-        <h1 className={styles.bookedHeading}>Booking confirmed</h1>
+        <h1 className={styles.bookedHeading}>Doctor Session Confirmed</h1>
         <p className={styles.bookedText}>
-          Booking confirmed with <span className={styles.bookedBold}>{booked.doctor}</span> at{' '}
+          Doctor session booked with <span className={styles.bookedBold}>{booked.doctor}</span> at{' '}
           <span className={styles.bookedBold}>{booked.org}</span>, <span className={styles.bookedBold}>{booked.time}</span>.
         </p>
         <div className={styles.bookedCard}>
@@ -68,10 +68,10 @@ function AvailableSlots() {
     <div className={styles.container}>
       <div className={styles.headerSection}>
         <h1 className={styles.headerTitle}>
-          {filterKey ? <>Available <span className={styles.capitalize}>{filterKey}</span> slots</> : 'Available slots'}
+          {filterKey ? <>Available <span className={styles.capitalize}>{filterKey}</span> Sessions</> : 'Available Doctor Sessions'}
         </h1>
         <p className={styles.headerDesc}>
-          {filterKey ? 'Showing slots filtered by specialty. Clear filter to see all.' : 'Select a time slot to book your appointment.'}
+          {filterKey ? 'Showing sessions filtered by doctor specialty. Clear filter to see all.' : 'Select an available session to book your doctor appointment.'}
         </p>
       </div>
 
@@ -84,7 +84,7 @@ function AvailableSlots() {
             </svg>
           </button>
         )}
-        <span className={styles.slotCount}>{loading ? 'Loading...' : `${slots.length} slot${slots.length !== 1 ? 's' : ''} available`}</span>
+        <span className={styles.slotCount}>{loading ? 'Loading...' : `${slots.length} session${slots.length !== 1 ? 's' : ''} available`}</span>
       </div>
 
       {error && <div className={styles.errorBox}>{error}</div>}
@@ -106,7 +106,7 @@ function AvailableSlots() {
           <svg className={styles.emptySvg} fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
           </svg>
-          <p className={styles.emptyTitle}>No slots available</p>
+          <p className={styles.emptyTitle}>No sessions available</p>
           <p className={styles.emptyDesc}>{filterKey ? 'Try removing the filter or check back later.' : 'Check back later for new openings.'}</p>
         </div>
       )}
@@ -134,7 +134,7 @@ function AvailableSlots() {
                 {slot.org}
               </div>
               <button onClick={() => handleConfirm(slot)} disabled={isConfirming || confirming !== null} className={styles.bookBtn}>
-                {isConfirming ? 'Confirming...' : 'Book this slot'}
+                {isConfirming ? 'Confirming...' : 'Book Doctor Session'}
               </button>
             </div>
           );

@@ -5,19 +5,25 @@ import 'leaflet/dist/leaflet.css';
 import * as api from '../services/api';
 import styles from './HospitalMap.module.css';
 
-// Custom Marker Icons using Inline SVG / Leaflet divIcons
-const createCustomIcon = (type, label) => {
+// Custom Map Pins: Green 🟢 for Registered MediGuide Partners, Blue 🔵 for Google Maps Public Facilities
+const createCustomIcon = (type, label, source = 'mediguide_partner') => {
   const isPatient = type === 'patient';
-  const color = isPatient ? '#2563eb' : type === 'Hospital' ? '#ef4444' : '#10b981';
+  const isPartner = source === 'mediguide_partner';
+  const color = isPatient ? '#2563eb' : isPartner ? '#059669' : '#0284c7';
+
   const iconSvg = isPatient
-    ? `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><circle cx="12" cy="12" r="10" fill="#2563eb"/><circle cx="12" cy="12" r="4" fill="white"/></svg>`
-    : `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${color}"/><path d="M12 6v6M9 9h6" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>`;
+    ? `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><circle cx="12" cy="12" r="10" fill="#2563eb"/><circle cx="12" cy="12" r="4" fill="white"/></svg>`
+    : `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${color}"/><path d="M12 6v6M9 9h6" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>`;
+
+  const badgeColor = isPartner ? '#dcfce7' : '#e0f2fe';
+  const textColor = isPartner ? '#15803d' : '#0369a1';
+  const iconLabel = isPartner ? `🟢 ${label}` : `🔵 ${label}`;
 
   return L.divIcon({
     className: 'custom-map-pin',
-    html: `<div style="display:flex;flex-direction:column;align-items:center;">${iconSvg}<span style="background:white;color:#0f172a;font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;border:1px solid #cbd5e1;box-shadow:0 2px 4px rgba(0,0,0,0.15);white-space:nowrap;">${label}</span></div>`,
-    iconSize: [30, 45],
-    iconAnchor: [15, 45]
+    html: `<div style="display:flex;flex-direction:column;align-items:center;">${iconSvg}<span style="background:${badgeColor};color:${textColor};font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;border:1px solid ${isPartner ? '#bbf7d0' : '#bae6fd'};box-shadow:0 2px 4px rgba(0,0,0,0.15);white-space:nowrap;">${iconLabel}</span></div>`,
+    iconSize: [32, 48],
+    iconAnchor: [16, 48]
   });
 };
 
@@ -29,15 +35,22 @@ function ChangeView({ center }) {
   return null;
 }
 
-export default function HospitalMap({ filterSpecialty = '' }) {
-  const [patientCoords, setPatientCoords] = useState([33.6844, 73.0479]); // Default Islamabad/Rawalpindi coords
-  const [locationStatus, setLocationStatus] = useState('requesting'); // 'requesting', 'success', 'denied'
+export default function HospitalMap({ filterSpecialty = '', onSelectBooking = null }) {
+  const [patientCoords, setPatientCoords] = useState([40.7128, -74.0060]); // Default coords
+  const [locationStatus, setLocationStatus] = useState('requesting');
   const [facilities, setFacilities] = useState([]);
+  const [activeTab, setActiveTab] = useState('all'); // 'all', 'partners', 'google'
   const [loading, setLoading] = useState(true);
   const [selectedFacility, setSelectedFacility] = useState(null);
 
+  // Review Modal State for Registered App Partners
+  const [reviewModalOrg, setReviewModalOrg] = useState(null);
+  const [newRating, setNewRating] = useState(5);
+  const [newComment, setNewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewSuccess, setReviewSuccess] = useState('');
+
   useEffect(() => {
-    // Request Browser Geolocation
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -50,71 +63,121 @@ export default function HospitalMap({ filterSpecialty = '' }) {
         (err) => {
           console.warn('Geolocation permission denied/unavailable:', err.message);
           setLocationStatus('denied');
-          loadNearbyFacilities(33.6844, 73.0479);
+          loadNearbyFacilities(40.7128, -74.0060);
         },
         { enableHighAccuracy: true, timeout: 10000 }
       );
     } else {
       setLocationStatus('denied');
-      loadNearbyFacilities(33.6844, 73.0479);
+      loadNearbyFacilities(40.7128, -74.0060);
     }
   }, []);
 
   const loadNearbyFacilities = async (lat, lng) => {
     setLoading(true);
     try {
-      let data = await api.fetchNearbyOrganizations(lat, lng, 20);
-      let orgs = data?.organizations || data?.data || [];
-      if (!orgs || orgs.length === 0) {
-        let allOrgs = await api.fetchOrganizations();
-        orgs = allOrgs?.organizations || allOrgs || [];
-      }
-      
-      // Calculate realistic distance mock if missing
-      const formatted = orgs.map((org, idx) => {
-        const coords = org.location?.coordinates
-          ? [org.location.coordinates[1], org.location.coordinates[0]]
-          : [lat + (idx % 2 === 0 ? 0.015 * (idx + 1) : -0.012 * (idx + 1)), lng + (idx % 3 === 0 ? 0.018 * (idx + 1) : -0.014 * (idx + 1))];
-
-        const dist = org.distanceInKm || (1.2 + idx * 0.8).toFixed(1);
+      const data = await api.fetchNearbyOrganizations(lat, lng, 15);
+      const list = data?.data || data?.organizations || [];
+      const formatted = list.map((fac, idx) => {
+        const coords = fac.location?.coordinates
+          ? [fac.location.coordinates[1], fac.location.coordinates[0]]
+          : [lat + (idx % 2 === 0 ? 0.008 * (idx + 1) : -0.007 * (idx + 1)), lng + (idx % 3 === 0 ? 0.009 * (idx + 1) : -0.006 * (idx + 1))];
 
         return {
-          ...org,
+          ...fac,
+          id: fac._id || fac.id || `fac_${idx}`,
           coords,
-          distance: dist
+          distanceKm: fac.distanceKm || (1.1 + idx * 0.7).toFixed(1),
+          source: fac.source || (fac.isPartner ? 'mediguide_partner' : 'google_maps')
         };
       });
 
       setFacilities(formatted);
     } catch (err) {
-      console.error('Failed to fetch nearby facilities:', err);
+      console.error('Failed to load facilities:', err);
     } finally {
       setLoading(false);
     }
   };
 
+  const handlePostReview = async (e) => {
+    e.preventDefault();
+    if (!reviewModalOrg || !newComment.trim() || submittingReview) return;
+
+    setSubmittingReview(true);
+    setReviewSuccess('');
+
+    try {
+      const res = await fetch(`http://localhost:5000/api/organizations/${reviewModalOrg._id || reviewModalOrg.id}/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating: newRating, comment: newComment, patientName: 'Verified App Patient' })
+      });
+
+      const resData = await res.json();
+      if (resData.success) {
+        setReviewSuccess('✓ Your review has been posted successfully!');
+        setNewComment('');
+        // Reload facilities to reflect updated reviews & rating
+        loadNearbyFacilities(patientCoords[0], patientCoords[1]);
+      }
+    } catch (err) {
+      console.error('Failed to post review:', err);
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const filteredFacilities = facilities.filter((fac) => {
+    if (activeTab === 'partners') return fac.source === 'mediguide_partner';
+    if (activeTab === 'google') return fac.source === 'google_maps';
+    return true;
+  });
+
   return (
     <div className={styles.mapContainerCard}>
+      {/* Map Header & Source Filter Tabs */}
       <div className={styles.mapHeader}>
         <div className={styles.mapTitleBox}>
-          <span className={styles.mapIcon}>🗺️</span>
+          <span className={styles.mapIcon}>🏥</span>
           <div>
-            <h4 className={styles.mapHeading}>Nearby Healthcare Facilities</h4>
+            <h4 className={styles.mapHeading}>Healthcare Facilities Map</h4>
             <p className={styles.mapSubtext}>
-              {locationStatus === 'success' ? '📍 Showing clinics & hospitals near your location' : '📍 Default location view (Location permission recommended)'}
+              Dual Source: 🟢 Registered MediGuide Partners & 🔵 Nearby Google Maps Facilities
             </p>
           </div>
         </div>
 
-        {locationStatus === 'denied' && (
-          <span className={styles.locationBadgeDenied}>Location Off</span>
-        )}
-        {locationStatus === 'success' && (
-          <span className={styles.locationBadgeSuccess}>Live GPS</span>
-        )}
+        {locationStatus === 'denied' && <span className={styles.locationBadgeDenied}>Location Off</span>}
+        {locationStatus === 'success' && <span className={styles.locationBadgeSuccess}>Live GPS</span>}
       </div>
 
-      {/* Map Container */}
+      {/* Filter Tabs */}
+      <div className={styles.sourceTabsRow}>
+        <button
+          type="button"
+          className={`${styles.sourceTab} ${activeTab === 'all' ? styles.activeSourceTab : ''}`}
+          onClick={() => setActiveTab('all')}
+        >
+          All Facilities ({facilities.length})
+        </button>
+        <button
+          type="button"
+          className={`${styles.sourceTab} ${styles.tabPartner} ${activeTab === 'partners' ? styles.activeSourceTab : ''}`}
+          onClick={() => setActiveTab('partners')}
+        >
+          🟢 MediGuide Partners (Direct Booking)
+        </button>
+        <button
+          type="button"
+          className={`${styles.sourceTab} ${styles.tabGoogle} ${activeTab === 'google' ? styles.activeSourceTab : ''}`}
+          onClick={() => setActiveTab('google')}
+        >
+          🔵 Google Maps Facilities
+        </button>
+      </div>
+
+      {/* Map Canvas */}
       <div className={styles.mapWrapper}>
         <MapContainer center={patientCoords} zoom={13} scrollWheelZoom={false} className={styles.leafletMap}>
           <ChangeView center={patientCoords} />
@@ -123,34 +186,57 @@ export default function HospitalMap({ filterSpecialty = '' }) {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          {/* Patient Current Location Marker */}
-          <Marker position={patientCoords} icon={createCustomIcon('patient', 'You')}>
+          {/* Patient Location */}
+          <Marker position={patientCoords} icon={createCustomIcon('patient', 'You', 'patient')}>
             <Popup>
               <div className={styles.popupCard}>
                 <strong>📍 Your Location</strong>
-                <p>GPS Coordinates active</p>
+                <p>Live GPS position active</p>
               </div>
             </Popup>
           </Marker>
 
-          {/* Nearby Hospital Markers */}
-          {facilities.map((fac) => (
+          {/* Facility Markers */}
+          {filteredFacilities.map((fac) => (
             <Marker
-              key={fac._id || fac.id || fac.name}
+              key={fac.id}
               position={fac.coords}
-              icon={createCustomIcon(fac.type || 'Hospital', fac.name)}
-              eventHandlers={{
-                click: () => setSelectedFacility(fac)
-              }}
+              icon={createCustomIcon(fac.type || 'Hospital', fac.name, fac.source)}
+              eventHandlers={{ click: () => setSelectedFacility(fac) }}
             >
               <Popup>
                 <div className={styles.popupCard}>
-                  <h5>🏥 {fac.name}</h5>
-                  <p className={styles.popupType}>{fac.type || 'Hospital'} • ⭐ {fac.rating || '4.8'}</p>
-                  <p className={styles.popupAddress}>📍 {fac.address || 'Medical Complex, Main Rd'}</p>
-                  <p className={styles.popupDist}>📏 {fac.distance} km away</p>
-                  {fac.phone && (
-                    <a href={`tel:${fac.phone}`} className={styles.popupCallBtn}>📞 Call {fac.phone}</a>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                    <span className={fac.source === 'mediguide_partner' ? styles.badgePartnerMini : styles.badgeGoogleMini}>
+                      {fac.source === 'mediguide_partner' ? '🟢 Registered Partner' : '🔵 Google Maps'}
+                    </span>
+                  </div>
+                  <h5>{fac.name}</h5>
+                  <p className={styles.popupType}>{fac.type} • ⭐ {fac.averageRating || fac.googleRating || fac.rating || '4.6'}</p>
+                  <p className={styles.popupAddress}>📍 {fac.address}</p>
+
+                  {fac.source === 'mediguide_partner' ? (
+                    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <button
+                        type="button"
+                        className={styles.popupBookBtn}
+                        onClick={() => onSelectBooking && onSelectBooking(fac)}
+                      >
+                        📅 Book Doctor Session
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.popupReviewBtn}
+                        onClick={() => setReviewModalOrg(fac)}
+                      >
+                        ⭐ App Reviews ({fac.reviews?.length || fac.totalReviews || 0})
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: '6px' }}>
+                      <p className={styles.googleSnippet}>{fac.publicReviewSnippet || `⭐ ${fac.googleRating} (${fac.googleReviewsCount} Google Reviews)`}</p>
+                      {fac.phone && <a href={`tel:${fac.phone}`} className={styles.popupCallBtn}>📞 Call {fac.phone}</a>}
+                    </div>
                   )}
                 </div>
               </Popup>
@@ -159,35 +245,151 @@ export default function HospitalMap({ filterSpecialty = '' }) {
         </MapContainer>
       </div>
 
-      {/* Facilities Quick Cards Carousel below Map */}
+      {/* Facilities Cards Scroll list below Map */}
       <div className={styles.facilityListContainer}>
-        <h5 className={styles.listHeaderTitle}>Nearest Emergency & Clinics ({facilities.length})</h5>
+        <h5 className={styles.listHeaderTitle}>
+          Showing {filteredFacilities.length} Healthcare Facilities Nearby
+        </h5>
         <div className={styles.facilityCardsScroll}>
-          {facilities.map((fac) => (
+          {filteredFacilities.map((fac) => (
             <div
-              key={fac._id || fac.id || fac.name}
-              className={`${styles.facilityCard} ${selectedFacility?.name === fac.name ? styles.selectedCard : ''}`}
+              key={fac.id}
+              className={`${styles.facilityCard} ${fac.source === 'mediguide_partner' ? styles.cardPartnerBorder : styles.cardGoogleBorder} ${selectedFacility?.id === fac.id ? styles.selectedCard : ''}`}
               onClick={() => {
                 setSelectedFacility(fac);
                 setPatientCoords(fac.coords);
               }}
             >
+              <div className={styles.badgeSourceHeader}>
+                <span className={fac.source === 'mediguide_partner' ? styles.tagPartner : styles.tagGoogle}>
+                  {fac.source === 'mediguide_partner' ? '🟢 MediGuide Partner' : '🔵 Google Maps'}
+                </span>
+                <span className={styles.distTag}>{fac.distanceKm} km</span>
+              </div>
+
               <div className={styles.facilityCardTop}>
                 <strong>{fac.name}</strong>
-                <span className={styles.distTag}>{fac.distance} km</span>
               </div>
-              <p className={styles.facAddress}>📍 {fac.address || 'Main Health Blvd'}</p>
+
+              <p className={styles.facAddress}>📍 {fac.address}</p>
+
               <div className={styles.facCardFooter}>
-                <span className={styles.facType}>{fac.type || 'Hospital'}</span>
-                <span className={styles.facRating}>⭐ {fac.rating || '4.7'}</span>
+                <span className={styles.facType}>{fac.type}</span>
+                <span className={styles.facRating}>⭐ {fac.averageRating || fac.googleRating || fac.rating || '4.6'}</span>
               </div>
-              {fac.phone && (
-                <a href={`tel:${fac.phone}`} className={styles.btnCallMini}>📞 Call Hospital</a>
+
+              {/* Verified Patient Review Preview Snippet */}
+              {fac.source === 'mediguide_partner' && fac.reviews && fac.reviews.length > 0 && (
+                <div className={styles.cardReviewSnippet}>
+                  💬 "{fac.reviews[0].comment.length > 60 ? fac.reviews[0].comment.substring(0, 60) + '...' : fac.reviews[0].comment}"
+                  <span className={styles.reviewAuthor}> — {fac.reviews[0].patientName} ({'⭐'.repeat(fac.reviews[0].rating)})</span>
+                </div>
+              )}
+
+              {fac.source === 'mediguide_partner' ? (
+                <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    className={styles.btnBookMini}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectBooking && onSelectBooking(fac);
+                    }}
+                  >
+                    📅 Book Session
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.btnReviewMini}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setReviewModalOrg(fac);
+                    }}
+                  >
+                    ⭐ {fac.reviews?.length || fac.totalReviews || 0} Reviews
+                  </button>
+                </div>
+              ) : (
+                <div style={{ marginTop: '6px' }}>
+                  {fac.phone && (
+                    <a href={`tel:${fac.phone}`} className={styles.btnCallMini}>📞 Call Hospital</a>
+                  )}
+                </div>
               )}
             </div>
           ))}
         </div>
       </div>
+
+      {/* Patient Reviews Modal for Registered App Partner Organizations */}
+      {reviewModalOrg && (
+        <div className={styles.modalOverlay} onClick={() => setReviewModalOrg(null)}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <span className={styles.badgePartnerMini}>🟢 Registered Partner</span>
+                <h4>⭐ {reviewModalOrg.name} - Patient Reviews</h4>
+              </div>
+              <button type="button" className={styles.btnCloseModal} onClick={() => setReviewModalOrg(null)}>✕</button>
+            </div>
+
+            {reviewSuccess && <div className={styles.successAlert}>{reviewSuccess}</div>}
+
+            {/* In-App Patient Reviews List */}
+            <div className={styles.reviewsListSection}>
+              <h5>Verified App Patient Reviews ({reviewModalOrg.reviews?.length || 0})</h5>
+              {(!reviewModalOrg.reviews || reviewModalOrg.reviews.length === 0) ? (
+                <p className={styles.noReviews}>No patient reviews written yet. Be the first to leave a review!</p>
+              ) : (
+                <div className={styles.reviewsScroll}>
+                  {reviewModalOrg.reviews.map((rev, i) => (
+                    <div key={i} className={styles.reviewItemCard}>
+                      <div className={styles.reviewItemTop}>
+                        <strong>👤 {rev.patientName || 'Verified Patient'}</strong>
+                        <span className={styles.reviewStars}>{'⭐'.repeat(rev.rating)}</span>
+                      </div>
+                      <p className={styles.reviewComment}>"{rev.comment}"</p>
+                      <span className={styles.reviewDate}>Visited: {rev.visitDate || 'Recently'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Write a Review Form */}
+            <form onSubmit={handlePostReview} className={styles.reviewForm}>
+              <h5>✍️ Write a Patient Review</h5>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <label style={{ fontSize: '0.8125rem', fontWeight: '700' }}>Your Rating:</label>
+                <select
+                  value={newRating}
+                  onChange={(e) => setNewRating(Number(e.target.value))}
+                  className={styles.ratingSelect}
+                >
+                  <option value={5}>⭐⭐⭐⭐⭐ (5/5 Excellent)</option>
+                  <option value={4}>⭐⭐⭐⭐ (4/5 Very Good)</option>
+                  <option value={3}>⭐⭐⭐ (3/5 Average)</option>
+                  <option value={2}>⭐⭐ (2/5 Needs Improvement)</option>
+                  <option value={1}>⭐ (1/5 Poor)</option>
+                </select>
+              </div>
+
+              <textarea
+                rows={2}
+                placeholder="Write about your experience with doctors and facilities..."
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                className={styles.reviewTextarea}
+                required
+              />
+
+              <button type="submit" className={styles.btnSubmitReview} disabled={submittingReview}>
+                {submittingReview ? 'Posting Review...' : 'Post Patient Review'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
