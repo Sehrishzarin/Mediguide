@@ -13,26 +13,36 @@ import SymptomInput from './pages/patient/SymptomInput';
 import TriageResult from './pages/patient/TriageResult';
 import AvailableSlots from './pages/patient/AvailableSlots';
 import Emergency from './pages/patient/Emergency';
+import { PatientProtectedGuard, GuestOnlyGuard } from './components/RouteGuards';
 
 function App() {
   return (
     <AuthProvider>
       <PatientProvider>
         <Routes>
+          {/* Public Landing Page */}
           <Route path="/" element={<Home />} />
-          <Route path="/org/onboard" element={<OrgOnboarding />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/login" element={<PatientLogin />} />
-          <Route path="/org/login" element={<PatientLogin />} />
-          <Route path="/patient/signup" element={<PatientSignup />} />
-          <Route path="/patient/login" element={<PatientLogin />} />
-          <Route path="/patient" element={<PatientLayout />}>
-            <Route path="home" element={<PatientHome />} />
-            <Route path="profile" element={<PatientProfile />} />
-            <Route path="triage" element={<SymptomInput />} />
-            <Route path="triage/result" element={<TriageResult />} />
-            <Route path="slots" element={<AvailableSlots />} />
-            <Route path="emergency" element={<Emergency />} />
+
+          {/* Guest Only Routes (Blocked for logged-in users) */}
+          <Route element={<GuestOnlyGuard />}>
+            <Route path="/login" element={<PatientLogin />} />
+            <Route path="/org/login" element={<PatientLogin />} />
+            <Route path="/patient/signup" element={<PatientSignup />} />
+            <Route path="/patient/login" element={<PatientLogin />} />
+          </Route>
+
+          {/* Protected Routes (Blocked for logged-out users) */}
+          <Route element={<PatientProtectedGuard />}>
+            <Route path="/org/onboard" element={<OrgOnboarding />} />
+            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/patient" element={<PatientLayout />}>
+              <Route path="home" element={<PatientHome />} />
+              <Route path="profile" element={<PatientProfile />} />
+              <Route path="triage" element={<SymptomInput />} />
+              <Route path="triage/result" element={<TriageResult />} />
+              <Route path="slots" element={<AvailableSlots />} />
+              <Route path="emergency" element={<Emergency />} />
+            </Route>
           </Route>
         </Routes>
       </PatientProvider>

@@ -35,7 +35,7 @@ function PatientSignup() {
     try {
       const { user } = await api.signup(email, password, 'patient');
       login({ ...user, name });
-      navigate('/patient/home');
+      navigate('/patient/home', { replace: true });
     } catch (err) {
       setError(err.message || 'Signup failed. Please try again.');
     } finally {

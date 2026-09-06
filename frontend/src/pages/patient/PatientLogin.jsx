@@ -46,11 +46,11 @@ function PatientLogin() {
       // Route automatically based on user's role
       const role = user.role;
       if (role === 'admin') {
-        navigate('/admin');
+        navigate('/admin', { replace: true });
       } else if (role === 'organization') {
-        navigate('/org/onboard');
+        navigate('/org/onboard', { replace: true });
       } else {
-        navigate('/patient/home');
+        navigate('/patient/home', { replace: true });
       }
     } catch (err) {
       setError(err.message || 'Login failed. Please check your email and password.');

@@ -1,14 +1,21 @@
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { usePatient } from './PatientContext';
+import { useAuth } from '../../context/AuthContext';
 import styles from './PatientLayout.module.css';
 
 function PatientLayout() {
-  const { user, logout } = usePatient();
+  const { user, logout: patientLogout } = usePatient();
+  const { logout: authLogout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    logout();
-    navigate('/patient/login');
+    patientLogout();
+    if (authLogout) authLogout();
+    localStorage.removeItem('token');
+    localStorage.removeItem('mediguide_patient');
+    localStorage.removeItem('mediguide_user');
+    sessionStorage.clear();
+    navigate('/patient/login', { replace: true });
   };
 
   return (
