@@ -45,6 +45,9 @@ export function GuestOnlyGuard() {
 
   if (isLoggedIn) {
     const role = authUser?.role || patientUser?.role || 'user';
+    if (role === 'admin') {
+      return <Navigate to="/admin" replace />;
+    }
     if (role === 'organization') {
       return <Navigate to="/org/onboard" replace />;
     }

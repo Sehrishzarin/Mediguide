@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import * as api from '../services/api';
+import { API_BASE_URL } from '../services/api';
 import styles from './HospitalMap.module.css';
 
 // Custom Map Pins: Green 🟢 for Registered MediGuide Partners, Blue 🔵 for Google Maps Public Facilities
@@ -108,7 +109,8 @@ export default function HospitalMap({ filterSpecialty = '', onSelectBooking = nu
     setReviewSuccess('');
 
     try {
-      const res = await fetch(`http://localhost:5000/api/organizations/${reviewModalOrg._id || reviewModalOrg.id}/reviews`, {
+      const orgId = reviewModalOrg._id || reviewModalOrg.id;
+      const res = await fetch(`${API_BASE_URL}/organizations/${orgId}/reviews`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rating: newRating, comment: newComment, patientName: 'Verified App Patient' })

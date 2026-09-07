@@ -17,14 +17,12 @@ function PatientLogin() {
     setError('');
     if (role === 'admin') {
       setEmail('admin@mediguide.com');
-      setPassword('adminpassword123');
     } else if (role === 'org') {
       setEmail('hospital@mediguide.com');
-      setPassword('orgpassword123');
     } else {
       setEmail('user@mediguide.com');
-      setPassword('userpassword123');
     }
+    setPassword('');
   };
 
   const handleSubmit = async (e) => {
@@ -61,13 +59,27 @@ function PatientLogin() {
 
   return (
     <div className={styles.authPage}>
+      {/* Mobile-only branding header */}
+      <div className={styles.mobileBranding}>
+        <div className={styles.mobileLogo}>
+          <div className={styles.mobileLogoIcon}>
+            <svg className={styles.mobileLogoPulse} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
+            </svg>
+          </div>
+          <span className={styles.mobileLogoText}>MediGuide</span>
+        </div>
+        <h1 className={styles.mobileHeading}>Welcome Back</h1>
+        <p className={styles.mobileSubtext}>Sign in to continue your health journey</p>
+      </div>
+
       <div className={styles.authCard}>
         <div className={styles.authHeader}>
-          <Link to="/" className={styles.backLink}>
+          <Link to="/" className={`${styles.backLink} ${styles.desktopOnly}`}>
             &larr; Back to MediGuide Home
           </Link>
-          <h1 className={styles.heading}>Sign In</h1>
-          <p className={styles.subtext}>Enter your credentials to access MediGuide.</p>
+          <h1 className={`${styles.heading} ${styles.desktopOnly}`}>Sign In</h1>
+          <p className={`${styles.subtext} ${styles.desktopOnly}`}>Enter your credentials to access MediGuide.</p>
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>
@@ -102,8 +114,8 @@ function PatientLogin() {
           </button>
         </form>
 
-        <div className={styles.quickFillRow} style={{ marginTop: '1rem' }}>
-          <span>Quick Demo Fill:</span>
+        <div className={`${styles.quickFillRow} ${styles.desktopOnly}`} style={{ marginTop: '1rem' }}>
+          <span>Quick Demo Email:</span>
           <div style={{ display: 'flex', gap: '4px' }}>
             <button type="button" className={styles.btnQuickFill} onClick={() => fillDemo('user')}>Patient</button>
             <button type="button" className={styles.btnQuickFill} onClick={() => fillDemo('org')}>Hospital</button>
@@ -116,10 +128,12 @@ function PatientLogin() {
           <Link to="/patient/signup" className={styles.footerLink}>
             Sign up as Patient
           </Link>
-          {' • '}
-          <Link to="/org/onboard" className={styles.footerLink}>
-            Register Hospital
-          </Link>
+          <span className={styles.desktopOnly}>
+            {' • '}
+            <Link to="/org/onboard" className={styles.footerLink}>
+              Register Hospital
+            </Link>
+          </span>
         </p>
       </div>
     </div>
