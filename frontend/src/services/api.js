@@ -292,34 +292,32 @@ export const submitTriageSymptom = async (text, patientProfile = null, chatHisto
       return resData.data;
     }
   } catch (err) {
-    // AI Triage API network error, using local evaluator
+    // AI Triage API network error, using local fallback
   }
 
   const lower = text.toLowerCase();
 
-  // Emergency / cardiac / respiratory
+  // Emergency / cardiac / respiratory (including concatenated words like 'heartattack')
   if (
     lower.includes('chest pain') || lower.includes('chest') ||
-    lower.includes('breath') || lower.includes('heart') ||
-    lower.includes('palpitation') || lower.includes('cardiac')
+    lower.includes('breath') || lower.includes('heart') || lower.includes('heartattack') ||
+    lower.includes('palpitation') || lower.includes('cardiac') || lower.includes('stroke') ||
+    lower.includes('seizure') || lower.includes('unconscious') || lower.includes('faint') ||
+    lower.includes('bleeding') || lower.includes('dying') || lower.includes('die')
   ) {
-    return { category: 'Possible cardiac issue', specialty: 'Emergency', urgency_level: 'high' };
-  }
-
-  // Neurological emergency
-  if (
-    lower.includes('stroke') || lower.includes('seizure') ||
-    lower.includes('unconscious') || lower.includes('faint')
-  ) {
-    return { category: 'Possible neurological emergency', specialty: 'Emergency', urgency_level: 'high' };
-  }
-
-  // Severe trauma / bleeding
-  if (
-    lower.includes('bleeding') || lower.includes('fracture') ||
-    lower.includes('accident') || lower.includes('burn')
-  ) {
-    return { category: 'Possible trauma or injury', specialty: 'Emergency', urgency_level: 'high' };
+    return {
+      is_non_medical: false,
+      category: 'Acute Emergency Medical Alert',
+      specialty: 'Emergency Department',
+      urgency_level: 'high',
+      hospital_recommendation: 'HOSPITAL VISIT STRONGLY URGED (Emergency Care Required)',
+      show_map: true,
+      profile_impact_summary: 'Emergency symptom alert.',
+      conversational_response: `🚨 **EMERGENCY WARNING: Immediate Hospital Care Required**\n\nSymptoms such as cardiac chest tightness, heart attack signs, or severe breathlessness require immediate emergency evaluation. Please call emergency services (1122) or go to the nearest Emergency Room without delay.\n\nSit upright, avoid physical exertion, and remain calm while help arrives.`,
+      trigger_question: 'Do you require immediate emergency ambulance dispatch?',
+      precautionary_advice: 'Call emergency services (1122) or proceed immediately to the nearest Emergency Room.',
+      emergency_flag: true
+    };
   }
 
   // Skin conditions
@@ -328,7 +326,19 @@ export const submitTriageSymptom = async (text, patientProfile = null, chatHisto
     lower.includes('itch') || lower.includes('acne') ||
     lower.includes('mole') || lower.includes('eczema')
   ) {
-    return { category: 'Skin condition', specialty: 'Dermatologist', urgency_level: 'low' };
+    return {
+      is_non_medical: false,
+      category: 'Skin condition',
+      specialty: 'Dermatologist',
+      urgency_level: 'low',
+      hospital_recommendation: 'NO HOSPITAL VISIT NEEDED (Safe for Home Care)',
+      show_map: false,
+      profile_impact_summary: 'Dermatology consultation context.',
+      conversational_response: `😊 **No Hospital Visit Needed**\n\nBased on your description, this skin symptom can be safely evaluated at home or via a routine dermatologist visit. You do not need an emergency hospital trip.`,
+      trigger_question: 'How long has this rash or skin condition been present?',
+      precautionary_advice: 'Keep the area clean, cool, and avoid scratching.',
+      emergency_flag: false
+    };
   }
 
   // Fever / cold / flu
@@ -337,34 +347,35 @@ export const submitTriageSymptom = async (text, patientProfile = null, chatHisto
     lower.includes('cough') || lower.includes('flu') ||
     lower.includes('sore throat') || lower.includes('runny nose')
   ) {
-    return { category: 'Common viral infection', specialty: 'General Physician', urgency_level: 'low' };
+    return {
+      is_non_medical: false,
+      category: 'Common viral infection',
+      specialty: 'General Physician',
+      urgency_level: 'low',
+      hospital_recommendation: 'NO HOSPITAL VISIT NEEDED (Safe for Home Care)',
+      show_map: false,
+      profile_impact_summary: 'Routine viral illness.',
+      conversational_response: `😊 **No Hospital Visit Needed**\n\nYour symptoms resemble a routine viral illness. Resting and staying hydrated at home is safe. If your fever exceeds 103°F or you develop severe breathing difficulty, seek medical care.`,
+      trigger_question: 'When did your fever or cough begin?',
+      precautionary_advice: 'Rest adequately and stay hydrated with fluids.',
+      emergency_flag: false
+    };
   }
 
-  // Stomach / digestive
-  if (
-    lower.includes('stomach') || lower.includes('nausea') ||
-    lower.includes('vomit') || lower.includes('diarrhea') ||
-    lower.includes('constipation') || lower.includes('bloating')
-  ) {
-    return { category: 'Digestive issue', specialty: 'Gastroenterologist', urgency_level: 'medium' };
-  }
-
-  // Headache
-  if (lower.includes('headache') || lower.includes('migraine')) {
-    return { category: 'Headache or migraine', specialty: 'General Physician', urgency_level: 'medium' };
-  }
-
-  // Bone / joint
-  if (
-    lower.includes('bone') || lower.includes('joint') ||
-    lower.includes('back pain') || lower.includes('knee') ||
-    lower.includes('sprain')
-  ) {
-    return { category: 'Musculoskeletal issue', specialty: 'Orthopedist', urgency_level: 'medium' };
-  }
-
-  // Default
-  return { category: 'General symptoms', specialty: 'General Physician', urgency_level: 'medium' };
+  // Default mild guidance
+  return {
+    is_non_medical: false,
+    category: 'General Health Symptom',
+    specialty: 'General Physician',
+    urgency_level: 'low',
+    hospital_recommendation: 'NO HOSPITAL VISIT NEEDED (Safe for Home Care)',
+    show_map: false,
+    profile_impact_summary: 'General health evaluation.',
+    conversational_response: `🩺 **No Hospital Visit Needed**\n\nThere is no immediate indication for an emergency hospital trip. Rest at home and monitor how your body feels.`,
+    trigger_question: 'Could you describe how many days you have experienced this?',
+    precautionary_advice: 'Rest well and monitor for warning signs.',
+    emergency_flag: false
+  };
 };
 
 export const getAvailableSlots = async (specialtyFilter) => {

@@ -41,6 +41,7 @@ export default function OnboardingWizard({ onComplete }) {
 
   const finishOnboarding = () => {
     localStorage.setItem('mediguide_onboarded', 'true');
+    localStorage.removeItem('mediguide_just_signed_up');
     
     // Save collected basic health profile if user provided info
     const updatedProfile = {
@@ -339,11 +340,11 @@ export default function OnboardingWizard({ onComplete }) {
         <div className={styles.wizardFooter}>
           {step > 1 && (
             <button type="button" className={styles.btnBack} onClick={handleBack}>
-              &larr; Back
+              ← Back
             </button>
           )}
           <button type="button" className={styles.btnNext} onClick={handleNext}>
-            {step === totalSteps ? 'Launch Dashboard ✨' : 'Continue &rarr;'}
+            {step === totalSteps ? 'Launch Dashboard ✨' : 'Continue →'}
           </button>
         </div>
       </div>

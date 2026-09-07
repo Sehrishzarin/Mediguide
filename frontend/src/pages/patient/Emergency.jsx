@@ -50,8 +50,21 @@ function Emergency() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
           </svg>
         </div>
-        <h1 className={styles.headerTitle}>Emergency</h1>
-        <p className={styles.headerSubtext}>Quick access to emergency services</p>
+        <h1 className={styles.headerTitle}>Emergency Services</h1>
+        <p className={styles.headerSubtext}>Direct connection to Rescue 1122 & emergency responders</p>
+      </div>
+
+      {/* Rescue 1122 Direct Hotline Card */}
+      <div style={{ background: '#FEF2F2', border: '2px solid #FCA5A5', borderRadius: '1rem', padding: '1.25rem', marginBottom: '1.25rem', textAlign: 'center', boxShadow: '0 4px 14px rgba(220, 38, 38, 0.1)' }}>
+        <h2 style={{ fontSize: '1.125rem', fontWeight: '800', color: '#991B1B', marginBottom: '0.25rem' }}>
+          🚨 Rescue 1122 Emergency Hotline
+        </h2>
+        <p style={{ fontSize: '0.8125rem', color: '#B91C1C', marginBottom: '1rem' }}>
+          Instant direct call to Rescue 1122 emergency ambulance & medical response unit in Pakistan.
+        </p>
+        <a href="tel:1122" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', width: '100%', background: '#DC2626', color: '#ffffff', fontWeight: '800', fontSize: '1rem', padding: '0.875rem', borderRadius: '999px', textDecoration: 'none', boxShadow: '0 4px 14px rgba(220, 38, 38, 0.3)' }}>
+          📞 Call Rescue 1122 Now
+        </a>
       </div>
 
       <div className={styles.ambulanceCard}>

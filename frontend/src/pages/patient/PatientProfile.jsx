@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { usePatient } from './PatientContext';
+import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import Spinner from '../../components/Spinner';
 import ErrorToast from '../../components/ErrorToast';
 import * as api from '../../services/api';
@@ -47,7 +49,10 @@ function TagInput({ tags, onChange, placeholder }) {
 }
 
 function PatientProfile() {
-  const { user, login } = usePatient();
+  const { user, login, logout: patientLogout } = usePatient();
+  const { logout: authLogout } = useAuth();
+  const navigate = useNavigate();
+
   const fileRef = useRef(null);
   const editFileRef = useRef(null);
   const editingIdRef = useRef(null);
@@ -58,6 +63,16 @@ function PatientProfile() {
   const [toast, setToast] = useState('');
   const [reportActionId, setReportActionId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+  const handleLogout = () => {
+    patientLogout();
+    if (authLogout) authLogout();
+    localStorage.removeItem('token');
+    localStorage.removeItem('mediguide_patient');
+    localStorage.removeItem('mediguide_user');
+    sessionStorage.clear();
+    navigate('/patient/login', { replace: true });
+  };
 
   // Personal Info Fields (Editable)
   const [name, setName] = useState('');
@@ -265,6 +280,17 @@ function PatientProfile() {
         </button>
       </div>
 
+      {/* Sticky Profile Action Bar */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '0.25rem' }}>
+        <button onClick={handleSave} disabled={saving} className={styles.primaryBtn} style={{ flex: 1 }}>
+          {saving && <Spinner size="sm" />}
+          {saving ? 'Saving Profile...' : '💾 Save Profile Changes'}
+        </button>
+        <button type="button" onClick={handleLogout} className={styles.btnDangerOutline}>
+          🚪 Log Out
+        </button>
+      </div>
+
       {/* ── Personal Info Card ── */}
       <div className={`${styles.card} ${styles.accentTeal}`}>
         <div className={styles.cardHeader}>
@@ -343,6 +369,11 @@ function PatientProfile() {
             <input type="tel" placeholder="Phone" value={emergencyContact.phone || ''} onChange={(e) => setEmergencyContact({ ...emergencyContact, phone: e.target.value })} className={styles.input} />
           </div>
         </div>
+
+        <button onClick={handleSave} disabled={saving} className={styles.primaryBtn} style={{ marginTop: '1rem' }}>
+          {saving && <Spinner size="sm" />}
+          {saving ? 'Saving Changes...' : '💾 Save Personal Info Changes'}
+        </button>
       </div>
 
       {/* ── Ongoing Medication Card ── */}
@@ -356,6 +387,11 @@ function PatientProfile() {
           <h2 className={styles.cardTitle}>Ongoing Medication</h2>
         </div>
         <TagInput tags={medications} onChange={setMedications} placeholder="e.g. Metformin 500mg, Lisinopril 10mg" />
+
+        <button onClick={handleSave} disabled={saving} className={styles.primaryBtn} style={{ marginTop: '1rem' }}>
+          {saving && <Spinner size="sm" />}
+          {saving ? 'Saving Changes...' : '💾 Save Medication Changes'}
+        </button>
       </div>
 
       {/* ── Past Conditions Card ── */}
@@ -374,6 +410,11 @@ function PatientProfile() {
           <label className={styles.fieldLabel}>Known Allergies & Drug Sensitivities</label>
           <TagInput tags={allergies} onChange={setAllergies} placeholder="e.g. Penicillin, Peanuts, Latex" />
         </div>
+
+        <button onClick={handleSave} disabled={saving} className={styles.primaryBtn} style={{ marginTop: '1rem' }}>
+          {saving && <Spinner size="sm" />}
+          {saving ? 'Saving Changes...' : '💾 Save Conditions Changes'}
+        </button>
       </div>
 
       {/* ── Notes Card ── */}
@@ -453,6 +494,26 @@ function PatientProfile() {
             ))}
           </ul>
         )}
+      </div>
+
+      {/* ── Account Settings & Log Out Card ── */}
+      <div className={`${styles.card} ${styles.fullWidth}`} style={{ borderLeft: '4px solid #EF4444' }}>
+        <div className={styles.cardHeader}>
+          <div className={styles.cardIconWrap} style={{ background: '#FEE2E2', color: '#DC2626' }}>
+            <svg className={styles.cardIcon} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+            </svg>
+          </div>
+          <h2 className={styles.cardTitle}>Account & Session</h2>
+        </div>
+
+        <p style={{ fontSize: '0.8125rem', color: '#64748B', margin: '0 0 1rem 0' }}>
+          Signed in as <strong>{emailDisplay}</strong>. Log out to end your session or switch accounts.
+        </p>
+
+        <button type="button" onClick={handleLogout} className={styles.btnLogoutFull}>
+          🚪 Log Out of MediGuide
+        </button>
       </div>
     </div>
   );

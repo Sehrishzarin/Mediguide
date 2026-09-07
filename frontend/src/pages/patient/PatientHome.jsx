@@ -24,7 +24,7 @@ const ACTIONS = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
       </svg>
     ),
-    to: '/patient/triage',
+    to: '/patient/triage?new=true',
   },
   {
     label: 'Book Specialist Session',
@@ -40,7 +40,7 @@ const ACTIONS = [
   },
   {
     label: 'Emergency Route',
-    description: 'Instant 911 dispatch & emergency facilities map',
+    description: 'Instant 1122 dispatch & emergency facilities map',
     badgeBg: '#FEE2E2',
     iconColor: '#E53E3E',
     icon: (
@@ -60,9 +60,11 @@ function PatientHome() {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    // Check if onboarding is completed
-    const onboarded = localStorage.getItem('mediguide_onboarded');
-    if (!onboarded && (!user?.medicalProfile || Object.keys(user.medicalProfile).length === 0)) {
+    // Only trigger onboarding wizard when user JUST created a new account
+    const justSignedUp = localStorage.getItem('mediguide_just_signed_up') === 'true';
+    const onboarded = localStorage.getItem('mediguide_onboarded') === 'true';
+
+    if (justSignedUp && !onboarded) {
       setShowOnboarding(true);
     }
 
@@ -150,7 +152,7 @@ function PatientHome() {
       <div className={styles.recentConsultationsCard}>
         <div className={styles.recentHeaderRow}>
           <h3 className={styles.recentTitle}>💬 Recent AI Consultations</h3>
-          <Link to="/patient/triage" className={styles.btnStartNewLink}>+ Start New</Link>
+          <Link to="/patient/triage?new=true" className={styles.btnStartNewLink}>+ Start New</Link>
         </div>
 
         {recentChats.length === 0 ? (
@@ -160,7 +162,7 @@ function PatientHome() {
             {recentChats.map((chat) => (
               <div
                 key={chat.id}
-                onClick={() => navigate('/patient/triage')}
+                onClick={() => navigate(`/patient/triage?session=${chat.id}`)}
                 className={styles.recentItem}
               >
                 <div className={styles.recentItemBody}>

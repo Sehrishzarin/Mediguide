@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { usePatient } from './PatientContext';
 import * as api from '../../services/api';
 import HospitalMap from '../../components/HospitalMap';
@@ -9,6 +9,7 @@ const QUICK_CHIPS = ['Skin rash', 'Headache', 'Fever', 'Stomach pain', 'Chest pa
 
 export default function SymptomInput() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = usePatient();
   const chatEndRef = useRef(null);
 
@@ -32,28 +33,6 @@ export default function SymptomInput() {
   const [showMapInline, setShowMapInline] = useState(false);
   const [latestTriageResult, setLatestTriageResult] = useState(null);
 
-  // Load or Initialize Active Chat Session
-  useEffect(() => {
-    if (sessions.length > 0 && !activeSessionId) {
-      setActiveSessionId(sessions[0].id);
-      setMessages(sessions[0].messages || []);
-    } else if (sessions.length === 0) {
-      createNewChatSession();
-    }
-  }, []);
-
-  // Save Sessions to localStorage
-  useEffect(() => {
-    if (sessions.length > 0) {
-      localStorage.setItem('mediguide_ai_chats', JSON.stringify(sessions));
-    }
-  }, [sessions]);
-
-  // Auto scroll to bottom of chat
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
-
   const createNewChatSession = () => {
     const newSession = {
       id: 'session_' + Date.now(),
@@ -72,7 +51,45 @@ export default function SymptomInput() {
     setMessages(newSession.messages);
     setShowMapInline(false);
     setLatestTriageResult(null);
+    setShowHistorySidebar(false);
   };
+
+  // Handle URL Location & Search Parameters (?new=true, ?history=true, ?session=id, /patient/history)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const isNew = params.get('new') === 'true';
+    const isHistory = location.pathname === '/patient/history' || params.get('history') === 'true';
+    const requestedSessionId = params.get('session');
+
+    if (isNew) {
+      createNewChatSession();
+      navigate('/patient/triage', { replace: true });
+    } else if (isHistory) {
+      setShowHistorySidebar(true);
+    } else if (requestedSessionId) {
+      const found = sessions.find((s) => s.id === requestedSessionId);
+      if (found) {
+        switchChatSession(found);
+      }
+    } else if (sessions.length > 0 && !activeSessionId) {
+      setActiveSessionId(sessions[0].id);
+      setMessages(sessions[0].messages || []);
+    } else if (sessions.length === 0) {
+      createNewChatSession();
+    }
+  }, [location.search, location.pathname]);
+
+  // Save Sessions to localStorage
+  useEffect(() => {
+    if (sessions.length > 0) {
+      localStorage.setItem('mediguide_ai_chats', JSON.stringify(sessions));
+    }
+  }, [sessions]);
+
+  // Auto scroll to bottom of chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
 
   const switchChatSession = (session) => {
     setActiveSessionId(session.id);
@@ -217,6 +234,79 @@ export default function SymptomInput() {
     }
   };
 
+  const isHistoryTab = location.pathname === '/patient/history' || new URLSearchParams(location.search).get('history') === 'true';
+
+  if (isHistoryTab) {
+    return (
+      <div className={styles.triageLayout}>
+        <div className={styles.historyTabBanner}>
+          <div>
+            <h2 className={styles.historyTabTitle}>💬 AI Consultation History</h2>
+            <p className={styles.historyTabSub}>Review past symptom triage sessions & recommendations</p>
+          </div>
+          <button
+            type="button"
+            className={styles.btnNewChatHeader}
+            onClick={() => {
+              createNewChatSession();
+              navigate('/patient/triage');
+            }}
+          >
+            + New Consultation
+          </button>
+        </div>
+
+        <div className={styles.historyTabList}>
+          {sessions.length === 0 ? (
+            <div className={styles.emptyHistoryState}>
+              <p>No previous consultation history found.</p>
+              <button
+                type="button"
+                className={styles.btnNewChatHeader}
+                onClick={() => {
+                  createNewChatSession();
+                  navigate('/patient/triage');
+                }}
+              >
+                + Start First Consultation
+              </button>
+            </div>
+          ) : (
+            sessions.map((s) => (
+              <div
+                key={s.id}
+                className={`${styles.historyTabCard} ${s.id === activeSessionId ? styles.activeHistoryTabCard : ''}`}
+                onClick={() => {
+                  switchChatSession(s);
+                  navigate('/patient/triage');
+                }}
+              >
+                <div className={styles.historyCardBody}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong className={styles.historyCardTitle}>💬 {s.title}</strong>
+                    <span className={styles.historyCardDate}>{new Date(s.createdAt).toLocaleDateString()}</span>
+                  </div>
+                  <p className={styles.historyCardMeta}>{s.messages?.length || 0} messages exchange</p>
+                </div>
+                <div className={styles.historyCardActions}>
+                  <span className={styles.btnResumeLink}>Resume Chat →</span>
+                  <button
+                    type="button"
+                    className={styles.btnDeleteSession}
+                    onClick={(e) => deleteChatSession(e, s.id)}
+                    title="Delete Chat"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.triageLayout}>
       {/* Top Action Header Bar */}
@@ -224,49 +314,15 @@ export default function SymptomInput() {
         <button
           type="button"
           className={styles.btnHistoryToggle}
-          onClick={() => setShowHistorySidebar(!showHistorySidebar)}
+          onClick={() => navigate('/patient/history')}
         >
-          💬 History ({sessions.length})
+          💬 Chat History ({sessions.length})
         </button>
 
         <button type="button" className={styles.btnNewChat} onClick={createNewChatSession}>
           + New Consultation
         </button>
       </div>
-
-      {/* Slide-out History Sidebar */}
-      {showHistorySidebar && (
-        <div className={styles.sidebarDrawer}>
-          <div className={styles.drawerHeader}>
-            <h4>Consultation History</h4>
-            <button type="button" onClick={() => setShowHistorySidebar(false)} className={styles.btnCloseDrawer}>✕</button>
-          </div>
-          <div className={styles.sessionList}>
-            {sessions.map((s) => (
-              <div
-                key={s.id}
-                className={`${styles.sessionItem} ${s.id === activeSessionId ? styles.activeSession : ''}`}
-                onClick={() => switchChatSession(s)}
-              >
-                <div className={styles.sessionItemText}>
-                  <strong>💬 {s.title}</strong>
-                  <span className={styles.sessionDate}>
-                    {new Date(s.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className={styles.btnDeleteSession}
-                  onClick={(e) => deleteChatSession(e, s.id)}
-                  title="Delete Chat"
-                >
-                  🗑️
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Main Chat Thread */}
       <div className={styles.chatContainer}>

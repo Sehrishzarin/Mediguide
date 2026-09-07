@@ -40,6 +40,7 @@ function App() {
               <Route path="home" element={<PatientHome />} />
               <Route path="profile" element={<PatientProfile />} />
               <Route path="triage" element={<SymptomInput />} />
+              <Route path="history" element={<SymptomInput />} />
               <Route path="triage/result" element={<TriageResult />} />
               <Route path="slots" element={<AvailableSlots />} />
               <Route path="emergency" element={<Emergency />} />

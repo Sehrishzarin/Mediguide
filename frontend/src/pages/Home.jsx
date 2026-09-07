@@ -146,7 +146,7 @@ function Home() {
 
           <div className={styles.heroButtons}>
             <Link to="/patient/signup" className={styles.btnPrimary}>
-              Get Started as Patient
+              Get Started as User
             </Link>
             <Link to="/login" className={styles.btnOutline}>
               Sign In / Log In

@@ -70,25 +70,9 @@ function PatientLayout() {
             )}
 
             <Link to="/patient/home" className={styles.brandLink}>
-              <svg className={styles.brandIcon} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342" />
-              </svg>
+              <img src="/logo.jpg" alt="MediGuide Logo" style={{ height: '32px', width: 'auto', borderRadius: '6px', objectFit: 'contain' }} />
               <span className={styles.brandName}>MediGuide</span>
             </Link>
-          </div>
-
-          <div className={styles.headerActions}>
-            <Link to="/patient/profile" className={styles.profileLink} title="Profile">
-              <div className={styles.avatar}>
-                <svg className={styles.avatarIcon} fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-                </svg>
-              </div>
-              {user?.name && <span className={styles.userName}>{user.name}</span>}
-            </Link>
-            <button onClick={handleLogout} className={styles.logoutBtn} title="Log out">
-              Logout
-            </button>
           </div>
         </div>
       </header>
@@ -109,17 +93,17 @@ function PatientLayout() {
             <span className={styles.tabLabel}>Home</span>
           </Link>
 
-          {/* 2. AI Consult Tab */}
-          <Link to="/patient/triage" className={`${styles.tabItem} ${isActive('/patient/triage') ? styles.activeTab : ''}`}>
-            <svg width="22" height="22" fill={isActive('/patient/triage') ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a.598.598 0 0 1-.745-.644.598.598 0 0 1 .057-.168A5.946 5.946 0 0 0 6 17.553C3.606 16.037 2.25 13.916 2.25 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
+          {/* 2. Chat History Tab */}
+          <Link to="/patient/history" className={`${styles.tabItem} ${isActive('/patient/history') || (isActive('/patient/triage') && location.search.includes('history')) ? styles.activeTab : ''}`}>
+            <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
             </svg>
-            <span className={styles.tabLabel}>Consult</span>
+            <span className={styles.tabLabel}>Chat History</span>
           </Link>
 
-          {/* 3. Floating Action Button (FAB) for Start New Consultation */}
+          {/* 3. Floating Action Button (FAB) for New Chat with AI */}
           <div className={styles.fabWrapper}>
-            <Link to="/patient/triage" className={styles.fabCircle} title="Start New Consultation">
+            <Link to="/patient/triage?new=true" className={styles.fabCircle} title="New Chat with AI">
               <svg width="24" height="24" fill="none" stroke="white" strokeWidth="2.5" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
               </svg>

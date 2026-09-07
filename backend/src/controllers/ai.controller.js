@@ -1,8 +1,30 @@
 const { GoogleGenAI } = require('@google/genai');
 
+// Emergency keywords list (includes common misspellings, concatenated words, and severe triggers)
+const EMERGENCY_KEYWORDS = [
+  'heartattack', 'heart attack', 'cardiac', 'chest pain', 'chest tightness', 'chest pressure',
+  'shortness of breath', 'breathless', 'gasping', 'choking', 'stroke', 'seizure', 'convulsion',
+  'unconscious', 'fainted', 'passed out', 'collapsed', 'severe bleeding', 'hemorrhage',
+  'paralyzed', 'numbness', 'vision loss', 'dying', 'die', 'poison', 'overdose', 'excruciating'
+];
+
+const MEDICAL_KEYWORDS = [
+  'pain', 'fever', 'headache', 'rash', 'cough', 'stomach', 'chest', 'breath',
+  'bleed', 'sick', 'nausea', 'vomit', 'dizzy', 'hurt', 'swollen', 'throat',
+  'cold', 'flu', 'cramps', 'itch', 'infection', 'allergy', 'medication', 'doctor',
+  'hospital', 'symptom', 'pregnant', 'blood', 'tired', 'fatigue', 'sprain', 'injury',
+  'heart', 'attack', 'heartattack', 'stomachache', 'headache', 'backache', 'sore'
+];
+
 // Helper to identify greetings, follow-ups, and symptom inputs
 const categorizeInput = (text, history = []) => {
   const lower = (text || '').trim().toLowerCase();
+
+  // 0. Emergency keywords check ALWAYS takes highest precedence
+  const hasEmergency = EMERGENCY_KEYWORDS.some(k => lower.includes(k));
+  if (hasEmergency) {
+    return 'symptom_eval';
+  }
 
   // 1. Off-topic math / trivia / coding
   if (
@@ -26,32 +48,48 @@ const categorizeInput = (text, history = []) => {
     return 'acknowledgment';
   }
 
-  // 4. Check for specific medical symptom keywords
-  const medicalKeywords = [
-    'pain', 'fever', 'headache', 'rash', 'cough', 'stomach', 'chest', 'breath',
-    'bleed', 'sick', 'nausea', 'vomit', 'dizzy', 'hurt', 'swollen', 'throat',
-    'cold', 'flu', 'cramps', 'itch', 'infection', 'allergy', 'medication', 'doctor',
-    'hospital', 'symptom', 'pregnant', 'blood', 'tired', 'fatigue', 'sprain', 'injury'
-  ];
+  // 4. Check for medical symptom keywords
+  const hasMedicalTerm = MEDICAL_KEYWORDS.some(k => lower.includes(k));
 
-  const hasMedicalTerm = medicalKeywords.some(k => lower.includes(k));
-
-  if (!hasMedicalTerm) {
-    if (history.length > 0) {
-      // In an active conversation, user response is likely a follow-up answer (e.g. "2 days ago", "throbbing", "no")
-      return 'followup_answer';
-    } else {
-      return 'off_topic';
-    }
+  if (hasMedicalTerm) {
+    return 'symptom_eval';
   }
 
-  return 'symptom_eval';
+  if (history.length > 0) {
+    // In an active conversation, user response is a follow-up answer
+    return 'followup_answer';
+  }
+
+  return 'off_topic';
 };
 
-// Fallback Local Engine with Proactive Clinical Inquirer Dialog Support
+// Fallback Local Engine with Dynamic Opinion Switching & Clinical Triage Support
 const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
   const inputType = categorizeInput(symptomText, messages);
   const lower = (symptomText || '').toLowerCase();
+
+  // Check emergency keywords in input
+  const isEmergency = EMERGENCY_KEYWORDS.some(k => lower.includes(k));
+
+  const chronic = (profile.preExistingConditions || []).join(' ').toLowerCase();
+  const isPregnant = profile.pregnancyStatus && profile.pregnancyStatus !== 'N/A' && profile.pregnancyStatus !== 'Not Pregnant';
+
+  // ALWAYS trigger emergency opinion change if emergency symptoms are reported (even in follow-up)
+  if (isEmergency) {
+    return {
+      is_non_medical: false,
+      category: 'Acute Emergency Medical Alert',
+      specialty: 'Emergency Department',
+      urgency_level: 'high',
+      hospital_recommendation: 'HOSPITAL VISIT STRONGLY URGED (Emergency Care Required)',
+      show_map: true,
+      profile_impact_summary: `${isPregnant ? `Pregnancy (${profile.pregnancyStatus}). ` : ''}${chronic ? `Conditions: ${chronic}.` : 'Emergency evaluation needed.'}`,
+      conversational_response: `🚨 **EMERGENCY WARNING: Immediate Medical Care Required**\n\nBased on your description ("${symptomText}"), these symptoms carry severe cardiovascular or respiratory risks. Please do NOT wait or rest at home. Call emergency services (1122) or go to the nearest Emergency Department immediately.\n\nWhile help is on the way, sit upright, avoid physical exertion, and unbutton tight clothing.`,
+      trigger_question: 'Is someone with you right now, or do you need emergency dispatch immediately?',
+      precautionary_advice: 'Call emergency services (1122) or head to the nearest Emergency Room without delay.',
+      emergency_flag: true
+    };
+  }
 
   // 1. Warm Proactive Greeting
   if (inputType === 'greeting') {
@@ -63,7 +101,7 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
       hospital_recommendation: '',
       show_map: false,
       profile_impact_summary: '',
-      conversational_response: `Hello! I am your MediGuide AI Health Counselor. I am here to help understand how you're feeling and guide your health decisions.\n\nAre you experiencing any physical symptoms, pain, or health concerns today? Please tell me what's going on or where you feel unwell so I can assist you!`,
+      conversational_response: `Hello! I am your MediGuide AI Health Counselor. I am here to help evaluate your symptoms and guide your care choices.\n\nWhat physical symptoms or health concerns are you experiencing today? Please tell me what's going on so I can assist you!`,
       trigger_question: 'What symptoms or health concerns are you experiencing right now?',
       precautionary_advice: '',
       emergency_flag: false
@@ -80,8 +118,8 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
       hospital_recommendation: '',
       show_map: false,
       profile_impact_summary: '',
-      conversational_response: `I am your MediGuide AI Health Counselor. To help you effectively, please describe any physical symptoms, pain, or medical concerns you have.\n\nHow are you feeling physically today?`,
-      trigger_question: 'Are you experiencing any discomfort or symptoms right now?',
+      conversational_response: `I am your MediGuide AI Health Counselor. Please keep our conversation focused on your physical symptoms, health concerns, or medical profile.\n\nHow are you feeling physically right now?`,
+      trigger_question: 'Are you experiencing any discomfort or physical symptoms right now?',
       precautionary_advice: '',
       emergency_flag: false
     };
@@ -97,7 +135,7 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
       hospital_recommendation: '',
       show_map: false,
       profile_impact_summary: '',
-      conversational_response: `You are very welcome! Take good care of yourself. If your symptoms change or if you feel any new discomfort, feel free to update me anytime.`,
+      conversational_response: `You are very welcome! Take good care of yourself. If your symptoms change or if you experience any new discomfort, feel free to update me anytime.`,
       trigger_question: '',
       precautionary_advice: '',
       emergency_flag: false
@@ -107,49 +145,23 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
   // 4. Follow-up Answer Probing (User answering previous AI question)
   if (inputType === 'followup_answer') {
     return {
-      is_non_medical: true,
+      is_non_medical: false,
       category: 'Clinical Follow-up Evaluation',
-      specialty: '',
-      urgency_level: 'none',
-      hospital_recommendation: '',
+      specialty: 'General Physician',
+      urgency_level: 'low',
+      hospital_recommendation: 'NO HOSPITAL VISIT NEEDED (Safe for Home Care)',
       show_map: false,
-      profile_impact_summary: '',
-      conversational_response: `Thank you for sharing those additional details. That helps clarify what you're experiencing.\n\nBased on what you've described, if your symptoms remain mild, resting and staying hydrated at home is reasonable. If you develop high fever, severe unmanageable pain, or difficulty breathing, please seek medical evaluation.`,
-      trigger_question: 'Is there any other detail about how you feel that I should know?',
-      precautionary_advice: 'Rest well and monitor how your body feels.',
+      profile_impact_summary: 'Symptom monitoring context.',
+      conversational_response: `Thank you for providing that context. That helps clarify what you are experiencing.\n\nBased on your description, if your symptoms remain mild, resting and staying hydrated at home is safe. However, if you develop chest pain, severe breathlessness, high fever, or sudden weakness, seek immediate emergency medical care.`,
+      trigger_question: 'Have your symptoms gotten better, stayed the same, or gotten worse?',
+      precautionary_advice: 'Rest well, drink fluids, and monitor for warning signs.',
       emergency_flag: false
     };
   }
 
-  // 5. Actual Physical Symptom Evaluation & Active Clinical Probing
-  const chronic = (profile.preExistingConditions || []).join(' ').toLowerCase();
-  const meds = (profile.currentMedications || []).map(m => typeof m === 'string' ? m : m.name).join(' ').toLowerCase();
+  // 5. Routine / Mild Symptoms — REASSURING + WARNING INSTRUCTIONS
   const allergies = (profile.allergies || []).join(' ').toLowerCase();
-  const isPregnant = profile.pregnancyStatus && profile.pregnancyStatus !== 'N/A' && profile.pregnancyStatus !== 'Not Pregnant';
 
-  // Emergency Symptoms Only (Chest pain, acute severe breathlessness, stroke signs)
-  const isEmergency =
-    lower.includes('chest pain') || lower.includes('shortness of breath') ||
-    lower.includes('stroke') || lower.includes('seizure') || lower.includes('unconscious') ||
-    (isPregnant && (lower.includes('bleeding') || lower.includes('severe abdominal')));
-
-  if (isEmergency) {
-    return {
-      is_non_medical: false,
-      category: 'Acute Emergency Symptom Cluster',
-      specialty: 'Emergency Department',
-      urgency_level: 'high',
-      hospital_recommendation: 'HOSPITAL VISIT STRONGLY URGED',
-      show_map: true,
-      profile_impact_summary: `Profile context: ${isPregnant ? `Pregnancy (${profile.pregnancyStatus}). ` : ''}${chronic ? `Conditions: ${chronic}.` : ''}`,
-      conversational_response: `🏥 **Clinical Decision: Emergency Hospital Evaluation Required**\n\nSymptoms such as chest tightness or acute severe breathlessness carry potential cardiac or respiratory risks. Please do not delay seeking medical evaluation at an Emergency Department.\n\nTo help emergency staff, could you tell me if the pain is spreading anywhere else?`,
-      trigger_question: 'Is the pain radiating to your arm, neck, or jaw, or are you experiencing cold sweats?',
-      precautionary_advice: 'Sit comfortably and avoid physical exertion.',
-      emergency_flag: true
-    };
-  }
-
-  // Routine / Mild Symptoms (Headache, Fatigue, Slight Cough, Minor Rash) — REASSURING + ACTIVE PROBING
   if (
     lower.includes('headache') || lower.includes('tired') || lower.includes('fatigue') ||
     lower.includes('cough') || lower.includes('rash') || lower.includes('itch') || lower.includes('stomach')
@@ -162,8 +174,8 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
       hospital_recommendation: 'NO HOSPITAL VISIT NEEDED (Safe for Home Care)',
       show_map: false,
       profile_impact_summary: `Profile check: ${allergies ? `Allergies: ${allergies}.` : 'No conflicting drug allergies reported.'}`,
-      conversational_response: `😊 **No Hospital Visit Needed**\n\nI understand how uncomfortable this feels, but based on your description, this appears to be a routine symptom. You do **not** need to rush to a clinic or hospital right now.\n\nTo understand what is happening better: How long have you felt this way, and are you experiencing any fever or other symptoms along with it?`,
-      trigger_question: 'When did this start, and would you describe it as mild, moderate, or severe?',
+      conversational_response: `😊 **No Hospital Visit Needed**\n\nBased on your description, this appears to be a routine symptom. You do **not** need to go to a clinic or hospital right now.\n\n**Home Instructions**: Rest well, stay hydrated, and monitor your symptoms.\n**When to Seek Care**: If you develop high fever, chest pain, difficulty breathing, or severe sudden pain, update me or seek medical evaluation immediately.`,
+      trigger_question: 'How long have you felt this way, and are you experiencing any fever or other symptoms?',
       precautionary_advice: 'Rest well and stay hydrated.',
       emergency_flag: false
     };
@@ -178,14 +190,14 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
     hospital_recommendation: 'HOME CARE FIRST (Clinic Visit Optional)',
     show_map: false,
     profile_impact_summary: `Profile check: ${profile.gender || 'Patient'}, ${chronic ? `Conditions: ${chronic}` : 'No chronic illnesses.'}`,
-    conversational_response: `🩺 **Home Care First**\n\nThere is no immediate need for a hospital trip. To help me understand what's going on more clearly, could you tell me when this started and if anything makes it feel better or worse?`,
+    conversational_response: `🩺 **Home Care First**\n\nThere is no immediate need for a hospital trip. Resting at home is reasonable.\n\n**Warning**: If your condition worsens significantly or you experience breathing trouble or chest pain, please seek prompt medical care.`,
     trigger_question: 'How many days have you experienced this, and are there any other symptoms?',
-    precautionary_advice: 'Rest adequately.',
+    precautionary_advice: 'Rest adequately and drink plenty of fluids.',
     emergency_flag: false
   };
 };
 
-// @desc    Deep Clinical Triage & Hospital Minimization Engine with Gemini AI
+// @desc    Deep Clinical Triage & Dynamic Opinion Engine with Gemini AI
 // @route   POST /api/ai/triage
 // @access  Public / Private
 exports.evaluateTriageWithAI = async (req, res) => {
@@ -214,7 +226,7 @@ exports.evaluateTriageWithAI = async (req, res) => {
           hospital_recommendation: '',
           show_map: false,
           profile_impact_summary: '',
-          conversational_response: `Hello! I am your MediGuide AI Health Counselor. I am here to help understand how you're feeling and guide your health decisions.\n\nAre you experiencing any physical symptoms, pain, or health concerns today? Please describe what's going on or where you feel unwell so I can assist you!`,
+          conversational_response: `Hello! I am your MediGuide AI Health Counselor. I am here to help evaluate your symptoms and guide your health decisions.\n\nAre you experiencing any physical symptoms, pain, or health concerns today? Please describe what's going on so I can assist you!`,
           trigger_question: 'What symptoms or health concerns are you experiencing right now?',
           precautionary_advice: '',
           emergency_flag: false
@@ -259,20 +271,19 @@ exports.evaluateTriageWithAI = async (req, res) => {
     const systemInstruction = `
 You are MediGuide's Lead AI Health Counselor.
 
-YOUR CORE BEHAVIOR & INQUISITIVE CLINICAL PROBING RULES:
-1. GREETINGS & INTROS:
-   If the user greets you ("hi", "hello", "hey"), greet them warmly and proactively ask what symptoms or physical discomfort they are experiencing today so you can understand what is going on.
+DYNAMIC OPINION SWITCHING & CLINICAL TRIAGE INSTRUCTIONS:
+1. RE-EVALUATE URGENCY ON EVERY TURN:
+   - You MUST dynamically re-assess the patient's condition on EVERY single message in the conversation.
+   - You MUST HAVE THE ABILITY TO CHANGE YOUR OPINION IN THE SAME CHAT THREAD!
+   - If a patient previously reported mild symptoms (e.g. routine headache, mild fatigue), but NOW reports a severe or emergency symptom (such as "I'm having a heart attack", "chest pain", "shortness of breath", "severe bleeding", "sudden paralysis", "fainting"), YOU MUST INSTANTLY CHANGE YOUR OPINION!
+   - Instantly elevate "urgency_level" to "high", set "hospital_recommendation": "HOSPITAL VISIT STRONGLY URGED (Emergency Care Required)", set "show_map": true, set "emergency_flag": true, and warn the patient clearly that immediate emergency care is required.
 
-2. ACTIVE CLINICAL PROBING (KNOW WHAT IS GOING ON):
-   - When the user describes symptoms (brief or detailed), DO NOT give generic canned responses!
-   - Actively PROBE to understand the situation deeply: ask about onset, pain quality (throbbing, sharp, dull), severity (1-10), associated signs (fever, nausea, rash), and triggers.
-   - For mild or routine symptoms, explicitly reassure the user that home care is completely safe and NO hospital trip is necessary.
+2. CLEAR INSTRUCTIONS & WARNINGS:
+   - Provide clear home care instructions and specify warning signs ONLY when home care is safe.
+   - Warn and instruct a hospital/clinic visit ONLY if a visit is clinically needed based on risk.
 
 3. OUT-OF-CONTEXT REMINDERS:
    If the user's message is off-topic (math, trivia, unrelated chatter), set "is_non_medical": true and gently remind them to stay focused on physical health symptoms.
-
-4. CONTINUOUS MULTI-TURN DIALOG:
-   Treat the conversation as a natural dialog with a caring health practitioner. Integrate prior chat history into your understanding.
 
 Respond strictly in valid JSON matching this schema:
 {
@@ -280,12 +291,12 @@ Respond strictly in valid JSON matching this schema:
   "category": "Short description of symptom area or dialog state",
   "specialty": "Recommended Doctor Specialist or empty if N/A",
   "urgency_level": "high | medium | low | none",
-  "hospital_recommendation": "HOSPITAL VISIT STRONGLY URGED | CLINIC VISIT OPTIONAL | NO HOSPITAL VISIT NEEDED (Safe for Home Care) | empty if N/A",
+  "hospital_recommendation": "HOSPITAL VISIT STRONGLY URGED (Emergency Care Required) | CLINIC VISIT RECOMMENDED | NO HOSPITAL VISIT NEEDED (Safe for Home Care) | empty if N/A",
   "show_map": true | false,
   "profile_impact_summary": "Summary of patient health background impact or empty",
-  "conversational_response": "Proactive, empathetic response asking clarifying clinical questions to understand what is going on",
+  "conversational_response": "Proactive, empathetic response with clear clinical guidance and warnings",
   "trigger_question": "Targeted clinical follow-up question regarding symptoms, onset, or severity",
-  "precautionary_advice": "Safe home self-care guidance or empty",
+  "precautionary_advice": "Safe home self-care guidance or warning instructions",
   "emergency_flag": true | false
 }
 `;
@@ -337,3 +348,4 @@ CURRENT PATIENT MESSAGE:
     });
   }
 };
+

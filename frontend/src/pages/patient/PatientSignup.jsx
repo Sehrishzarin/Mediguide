@@ -35,6 +35,11 @@ function PatientSignup() {
     try {
       const { user } = await api.signup(email, password, 'patient');
       login({ ...user, name });
+
+      // New account creation: Mark just signed up true and onboarded false to show wizard once
+      localStorage.setItem('mediguide_just_signed_up', 'true');
+      localStorage.removeItem('mediguide_onboarded');
+
       navigate('/patient/home', { replace: true });
     } catch (err) {
       setError(err.message || 'Signup failed. Please try again.');

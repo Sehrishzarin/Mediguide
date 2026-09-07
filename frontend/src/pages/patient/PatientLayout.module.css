@@ -13,7 +13,8 @@
   border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 500;
+  padding-top: max(env(safe-area-inset-top, 0px), 14px);
 }
 
 .headerInner {
@@ -102,16 +103,23 @@
 }
 
 .logoutBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  background: none;
-  border: none;
-  transition: color 0.2s;
+  font-weight: 700;
+  color: #DC2626;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  padding: 0.3125rem 0.625rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
 .logoutBtn:hover {
-  color: var(--color-danger);
+  background: #FEE2E2;
+  color: #B91C1C;
 }
 
 .main {
@@ -119,7 +127,7 @@
   max-width: 600px;
   margin: 0 auto;
   flex: 1;
-  padding-bottom: 90px; /* Space for bottom tab bar */
+  padding-bottom: calc(115px + env(safe-area-inset-bottom, 0px)); /* Generous clearance so content is never obscured by sticky bottom bar */
 }
 
 /* ── Fixed Bottom Mobile Tab Bar & Floating Action Button (FAB) ── */
@@ -131,8 +139,9 @@
   background: rgba(255, 255, 255, 0.98);
   backdrop-filter: blur(12px);
   border-top: 1px solid var(--color-border);
-  z-index: 200;
-  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.04);
+  z-index: 1000;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 4px);
 }
 
 .tabInner {

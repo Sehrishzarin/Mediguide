@@ -43,7 +43,7 @@ export default function AuthWall() {
       <div className="auth-wall-card">
         {/* App Branding */}
         <div className="auth-brand">
-          <div className="auth-logo">🏥</div>
+          <img src="/logo.jpg" alt="MediGuide Logo" style={{ width: '80px', height: '80px', borderRadius: '18px', objectFit: 'contain', margin: '0 auto 10px auto', display: 'block', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
           <h2>MediGuide</h2>
           <p className="auth-subtitle">Healthcare & Emergency Network</p>
         </div>
