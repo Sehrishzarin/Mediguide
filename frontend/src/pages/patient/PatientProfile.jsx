@@ -246,7 +246,12 @@ function PatientProfile() {
         </div>
         <div className={styles.bannerInfo}>
           <h1 className={styles.bannerName}>{name || user?.name || 'Patient User'}</h1>
-          <p className={styles.bannerEmail}>{emailDisplay}</p>
+          <p className={styles.bannerEmail}>
+            <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+            </svg>
+            {emailDisplay} <span style={{ opacity: 0.7, fontSize: '0.7rem' }}>(Account Email)</span>
+          </p>
         </div>
         <button
           type="button"

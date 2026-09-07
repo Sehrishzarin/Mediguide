@@ -1,73 +1,429 @@
-/* ── Available Slots ───────────────────────────────────────── */
+/* ── Available Doctor Sessions — Redesigned ───────────────── */
 
-.container { max-width: 32rem; margin: 0 auto; padding: 1.5rem 1rem; }
+.container {
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem;
+}
 
-.bookedScreen { max-width: 32rem; margin: 0 auto; padding: 2.5rem 1rem; text-align: center; }
-.successCircle { width: 4rem; height: 4rem; background: #dcfce7; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem; }
-.successSvg { width: 2rem; height: 2rem; color: #16a34a; }
-.bookedHeading { font-size: 1.5rem; font-weight: 700; color: #1f2937; margin-bottom: 0.5rem; }
-.bookedText { color: #6b7280; margin-bottom: 1.5rem; }
-.bookedBold { font-weight: 600; color: #374151; }
-.bookedCard { background: #fff; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 1.25rem; text-align: left; max-width: 24rem; margin: 0 auto 1.5rem; }
-.bookedRow { display: flex; justify-content: space-between; font-size: 0.875rem; padding: 0.375rem 0; }
-.bookedLabel { color: #6b7280; }
-.bookedValue { font-weight: 500; color: #1f2937; }
-.backBtn { width: 100%; max-width: 24rem; background: #0d9488; color: #fff; font-weight: 500; border-radius: 0.75rem; padding: 0.75rem; border: none; transition: background 0.2s; }
-.backBtn:hover { background: #0f766e; }
+.bookedScreen {
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 2.5rem 1rem;
+  text-align: center;
+}
 
-.headerSection { margin-bottom: 1.5rem; }
-.headerTitle { font-size: 1.25rem; font-weight: 700; color: #1f2937; margin-bottom: 0.25rem; }
-.capitalize { text-transform: capitalize; }
-.headerDesc { font-size: 0.875rem; color: #6b7280; }
+.successCircle {
+  width: 4.5rem;
+  height: 4.5rem;
+  background: #DCFCE7;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.25rem;
+  box-shadow: 0 4px 14px rgba(21, 128, 61, 0.15);
+}
 
-.filterBar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; margin-top: 1rem; }
-.filterChip { font-size: 0.75rem; background: #ccfbf1; color: #0f766e; font-weight: 500; border-radius: 9999px; padding: 0.25rem 0.75rem; border: none; display: flex; align-items: center; gap: 0.25rem; transition: background 0.2s; }
-.filterChip:hover { background: #99f6e4; }
-.filterChipSvg { width: 0.75rem; height: 0.75rem; }
-.slotCount { font-size: 0.75rem; color: #9ca3af; }
+.successSvg {
+  width: 2.25rem;
+  height: 2.25rem;
+  color: #15803D;
+}
 
-.errorBox { margin-bottom: 1rem; font-size: 0.875rem; color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; border-radius: 0.5rem; padding: 0.75rem 1rem; }
+.bookedHeading {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text, #1E293B);
+  margin-bottom: 0.5rem;
+}
 
-.skeleton { display: flex; flex-direction: column; gap: 0.75rem; }
-.skeletonCard { background: #fff; border-radius: 0.75rem; border: 1px solid #e5e7eb; padding: 1rem; animation: pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
-.skeletonBar { height: 0.875rem; background: #e5e7eb; border-radius: 0.25rem; margin-bottom: 0.75rem; width: 33%; }
-.skeletonBarShort { height: 0.75rem; background: #f3f4f6; border-radius: 0.25rem; margin-bottom: 0.5rem; width: 66%; }
-.skeletonBarShorter { height: 0.75rem; background: #f3f4f6; border-radius: 0.25rem; width: 50%; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+.bookedText {
+  color: var(--color-text-muted, #64748B);
+  margin-bottom: 1.5rem;
+  font-size: 0.9375rem;
+}
 
-.emptyCard { background: #fff; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 2.5rem; text-align: center; }
-.emptySvg { width: 3rem; height: 3rem; margin: 0 auto 0.75rem; color: #d1d5db; }
-.emptyTitle { color: #4b5563; font-weight: 500; }
-.emptyDesc { color: #9ca3af; font-size: 0.875rem; margin-top: 0.25rem; }
+.bookedBold {
+  font-weight: 700;
+  color: var(--color-text, #1E293B);
+}
 
-.slotList { display: flex; flex-direction: column; gap: 0.75rem; }
-.slotCard { background: #fff; border-radius: 0.75rem; border: 1px solid #e5e7eb; padding: 1rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: box-shadow 0.2s; }
-.slotCard:hover { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-.slotTop { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 0.5rem; }
-.slotDoctor { font-weight: 600; color: #1f2937; }
-.slotBadge { display: inline-block; font-size: 0.75rem; font-weight: 500; background: #f0fdfa; color: #0f766e; border-radius: 9999px; padding: 0.125rem 0.5rem; margin-top: 0.125rem; text-transform: capitalize; }
-.slotTime { font-size: 0.875rem; font-weight: 500; color: #374151; text-align: right; }
-.slotDate { font-size: 0.75rem; color: #9ca3af; text-align: right; }
-.slotLocation { display: flex; align-items: center; gap: 0.375rem; font-size: 0.75rem; color: #6b7280; margin-bottom: 0.75rem; }
-.slotLocationSvg { width: 0.875rem; height: 0.875rem; }
-.bookBtn { width: 100%; background: #0d9488; color: #fff; font-size: 0.875rem; font-weight: 500; border-radius: 0.5rem; padding: 0.5rem; border: none; transition: background 0.2s; }
-.bookBtn:hover { background: #0f766e; }
-.bookBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.bookedCard {
+  background: var(--color-card, #ffffff);
+  border-radius: var(--radius-card, 18px);
+  box-shadow: var(--shadow-soft, 0 4px 20px rgba(0, 0, 0, 0.05));
+  border: 1px solid var(--color-border, #E2E8F0);
+  padding: 1.25rem;
+  text-align: left;
+  max-width: 24rem;
+  margin: 0 auto 1.5rem;
+}
 
-/* ── Desktop: Auto-fill grid, vertical scroll ───────────────── */
+.bookedRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed var(--color-border, #E2E8F0);
+}
+
+.bookedRow:last-child {
+  border-bottom: none;
+}
+
+.bookedLabel {
+  color: var(--color-text-muted, #64748B);
+}
+
+.bookedValue {
+  font-weight: 700;
+  color: var(--color-text, #1E293B);
+}
+
+.backBtn {
+  width: 100%;
+  max-width: 24rem;
+  background: var(--color-primary-gradient, linear-gradient(135deg, #0F9C8E 0%, #0D8B7F 100%));
+  color: #fff;
+  font-weight: 700;
+  border-radius: var(--radius-pill, 999px);
+  padding: 0.875rem;
+  border: none;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(15, 156, 142, 0.3);
+  transition: all 0.2s ease;
+}
+
+.backBtn:active {
+  transform: scale(0.97);
+}
+
+.headerSection {
+  margin-bottom: 1.25rem;
+}
+
+.headerTitle {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text, #1E293B);
+  margin-bottom: 0.25rem;
+}
+
+.capitalize {
+  text-transform: capitalize;
+}
+
+.headerDesc {
+  font-size: 0.875rem;
+  color: var(--color-text-muted, #64748B);
+}
+
+.filterBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.filterChip {
+  font-size: 0.75rem;
+  background: var(--color-surface, #F6FBFA);
+  color: var(--color-primary, #0F9C8E);
+  font-weight: 700;
+  border-radius: var(--radius-pill, 999px);
+  padding: 0.375rem 0.875rem;
+  border: 1px solid var(--color-border, #E2E8F0);
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filterChip:hover {
+  background: #E0F2FE;
+}
+
+.filterChipSvg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.slotCount {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-muted, #64748B);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.errorBox {
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  color: #DC2626;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-radius: var(--radius-action, 12px);
+  padding: 0.75rem 1rem;
+}
+
+/* ── Skeleton Loaders ── */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.skeletonCard {
+  background: var(--color-card, #ffffff);
+  border-radius: var(--radius-card, 18px);
+  border: 1px solid var(--color-border, #E2E8F0);
+  padding: 1.25rem;
+  animation: pulse 1.8s infinite ease-in-out;
+}
+
+.skeletonTop {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  margin-bottom: 0.875rem;
+}
+
+.skeletonAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #E2E8F0;
+}
+
+.skeletonBar {
+  height: 1rem;
+  background: #E2E8F0;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  width: 50%;
+}
+
+.skeletonBarShort {
+  height: 0.75rem;
+  background: #F1F5F9;
+  border-radius: 4px;
+  width: 30%;
+}
+
+.skeletonBarShorter {
+  height: 2.25rem;
+  background: #F1F5F9;
+  border-radius: var(--radius-pill, 999px);
+  width: 100%;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.emptyCard {
+  background: var(--color-card, #ffffff);
+  border-radius: var(--radius-card, 18px);
+  box-shadow: var(--shadow-soft, 0 4px 20px rgba(0, 0, 0, 0.05));
+  border: 1px solid var(--color-border, #E2E8F0);
+  padding: 2.5rem;
+  text-align: center;
+}
+
+.emptySvg {
+  width: 3rem;
+  height: 3rem;
+  margin: 0 auto 0.75rem;
+  color: var(--color-text-muted, #64748B);
+}
+
+.emptyTitle {
+  color: var(--color-text, #1E293B);
+  font-weight: 700;
+}
+
+.emptyDesc {
+  color: var(--color-text-muted, #64748B);
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+/* ── Doctor Slot Cards Redesign ── */
+.slotList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.slotCard {
+  background: var(--color-card, #ffffff);
+  border-radius: var(--radius-card, 18px);
+  border: 1px solid var(--color-border, #E2E8F0);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-soft, 0 4px 20px rgba(0, 0, 0, 0.05));
+  transition: all 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.slotCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(15, 156, 142, 0.12);
+  border-color: var(--color-primary, #0F9C8E);
+}
+
+.slotMainHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.avatarCircle {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--color-primary-gradient, linear-gradient(135deg, #0F9C8E 0%, #0D8B7F 100%));
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.125rem;
+  box-shadow: 0 4px 10px rgba(15, 156, 142, 0.25);
+  flex-shrink: 0;
+}
+
+.doctorMeta {
+  flex: 1;
+  min-width: 0;
+}
+
+.slotDoctor {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text, #1E293B);
+  margin: 0 0 0.15rem 0;
+}
+
+.slotBadge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #E0F2FE;
+  color: var(--color-primary, #0F9C8E);
+  border-radius: var(--radius-pill, 999px);
+  padding: 0.15rem 0.625rem;
+  text-transform: capitalize;
+}
+
+/* Stat Pills Row */
+.statPillsRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.statPill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--color-surface, #F6FBFA);
+  color: var(--color-text-muted, #64748B);
+  border: 1px solid var(--color-border, #E2E8F0);
+  border-radius: var(--radius-pill, 999px);
+  padding: 0.2rem 0.625rem;
+}
+
+.statPillAccent {
+  font-size: 0.75rem;
+  font-weight: 800;
+  background: #FFF7ED;
+  color: var(--color-accent, #FF8A65);
+  border: 1px solid #FFEDD5;
+  border-radius: var(--radius-pill, 999px);
+  padding: 0.2rem 0.625rem;
+}
+
+/* Details Box (Location & Date/Time) */
+.slotDetailsBox {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: var(--color-surface, #F6FBFA);
+  border-radius: var(--radius-action, 12px);
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--color-border, #E2E8F0);
+  flex-wrap: wrap;
+}
+
+.slotLocation {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #64748B);
+}
+
+.slotLocationSvg {
+  width: 1rem;
+  height: 1rem;
+  color: var(--color-primary, #0F9C8E);
+}
+
+.dateTimeBadge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text, #1E293B);
+  background: #ffffff;
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--color-border, #E2E8F0);
+}
+
+/* Full-width CTA Button */
+.bookBtn {
+  width: 100%;
+  background: var(--color-primary-gradient, linear-gradient(135deg, #0F9C8E 0%, #0D8B7F 100%));
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 700;
+  border-radius: var(--radius-pill, 999px);
+  padding: 0.75rem;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(15, 156, 142, 0.25);
+  transition: all 0.2s ease;
+}
+
+.bookBtn:active {
+  transform: scale(0.97);
+}
+
+.bookBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Desktop: Auto-fill grid ───────────────── */
 @media (min-width: 769px) {
   .container {
     max-width: 72rem;
-    padding: 1.25rem;
+    padding: 1.5rem;
   }
 
   .slotList {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 20px;
-  }
-
-  .slotCard {
-    border-left: 3px solid #0d9488;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.25rem;
   }
 }
+

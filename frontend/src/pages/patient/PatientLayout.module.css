@@ -2,25 +2,27 @@
 
 .layout {
   min-height: 100vh;
-  background: linear-gradient(to bottom right, #f0fdfa, #ecfdf5);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
 }
 
 .header {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 100;
 }
 
 .headerInner {
-  max-width: 72rem;
+  max-width: 600px;
   margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1rem;
+  padding: 0.625rem 1rem;
 }
 
 .brandLink {
@@ -33,32 +35,31 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  color: #334155;
+  background: #F0Fdfa;
+  border: 1px solid var(--color-border);
+  color: var(--color-primary);
   font-size: 0.8125rem;
   font-weight: 700;
   padding: 0.375rem 0.625rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-action);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition-fast);
 }
 
 .backBtnHeader:hover {
-  background: #e2e8f0;
-  color: #0f172a;
+  background: #E2ECE9;
 }
 
 .brandIcon {
-  width: 1.75rem;
-  height: 1.75rem;
-  color: #0d9488;
+  width: 1.625rem;
+  height: 1.625rem;
+  color: var(--color-primary);
 }
 
 .brandName {
   font-size: 1.125rem;
-  font-weight: 700;
-  color: #1f2937;
+  font-weight: 800;
+  color: var(--color-text-primary);
 }
 
 .headerActions {
@@ -71,19 +72,15 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #4b5563;
-  transition: color 0.2s;
-}
-
-.profileLink:hover {
-  color: #0d9488;
+  color: var(--color-text-primary);
 }
 
 .avatar {
-  width: 2rem;
-  height: 2rem;
+  width: 2.125rem;
+  height: 2.125rem;
   border-radius: 50%;
-  background: #ccfbf1;
+  background: #E0F2FE;
+  border: 2px solid #BAE6FD;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -92,30 +89,113 @@
 .avatarIcon {
   width: 1.25rem;
   height: 1.25rem;
-  color: #0d9488;
+  color: var(--color-primary);
 }
 
 .userName {
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-size: 0.8125rem;
+  font-weight: 700;
 }
 
-@media (max-width: 639px) {
+@media (max-width: 480px) {
   .userName { display: none; }
 }
 
 .logoutBtn {
   font-size: 0.75rem;
-  color: #9ca3af;
+  font-weight: 600;
+  color: var(--color-text-muted);
   background: none;
   border: none;
   transition: color 0.2s;
 }
 
 .logoutBtn:hover {
-  color: #dc2626;
+  color: var(--color-danger);
 }
 
 .main {
   width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  flex: 1;
+  padding-bottom: 90px; /* Space for bottom tab bar */
+}
+
+/* ── Fixed Bottom Mobile Tab Bar & Floating Action Button (FAB) ── */
+.bottomTabBar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--color-border);
+  z-index: 200;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.tabInner {
+  max-width: 600px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr auto 1fr 1fr;
+  align-items: center;
+  height: 64px;
+  padding: 0 0.5rem;
+}
+
+.tabItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  transition: var(--transition-fast);
+}
+
+.tabItem:hover {
+  color: var(--color-primary);
+}
+
+.activeTab {
+  color: var(--color-primary) !important;
+  font-weight: 800 !important;
+}
+
+.tabLabel {
+  line-height: 1;
+}
+
+/* Floating Action Button (FAB) */
+.fabWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  top: -14px;
+}
+
+.fabCircle {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--color-primary-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 20px rgba(15, 156, 142, 0.4);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fabCircle:hover {
+  transform: scale(1.06);
+}
+
+.fabCircle:active {
+  transform: scale(0.95);
 }

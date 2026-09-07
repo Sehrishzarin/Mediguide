@@ -1,6 +1,6 @@
 # 🏥 MediGuide — AI Clinical Triage & Dual-Source Healthcare System
 
-MediGuide is an intelligent, user-centric healthcare navigation platform designed for busy individuals (working professionals, shift workers, 24/7 parents). The application minimizes user hesitation and confusion about seeking medical care by evaluating physical symptoms against the patient's full medical profile, providing authoritative guidance on **whether a hospital visit is necessary or if home care is safe**, and connecting them to nearby healthcare facilities.
+MediGuide is an intelligent, mobile-first healthcare navigation platform designed for busy individuals (working professionals, shift workers, 24/7 parents). The application minimizes user hesitation and confusion about seeking medical care by evaluating physical symptoms against the patient's full medical profile, providing authoritative guidance on **whether a hospital visit is necessary or if home care is safe**, and connecting them to nearby healthcare facilities.
 
 ---
 
@@ -13,7 +13,35 @@ MediGuide is an intelligent, user-centric healthcare navigation platform designe
 - **Inquisitive Clinical Probing**: Actively asks targeted clinical questions (onset, severity 1-10, pain quality, associated symptoms, triggers) to understand the full picture.
 - **Off-Topic / Context Filter**: Politely redirects non-medical or off-topic prompts (e.g., math questions, general trivia) without issuing scary medical alerts or doctor tags.
 
-### 2. 📋 Deep Patient Medical Profile Context Integration
+### 2. 🎨 Modern Design Language & Mobile UI (Figma-Inspired)
+- **Deep Teal & Soft Palette**: `#0F9C8E` (Primary Teal), `#F6FBFA` (Soft Background Surface), `#FF8A65` (Warm Accent Coral), and elevated card hierarchy (`18px` radius).
+- **Fixed Bottom Tab Bar & FAB**: Mobile navigation bar with a central Floating Action Button (`+`) for instant access to AI consultation.
+- **Platform-Aware Back Navigation**:
+  - **Web**: In-app `< Back` header button renders dynamically on web browser builds.
+  - **Native Android / iOS**: In-app header back button automatically hides to avoid duplicate web controls inside native apps, wiring system hardware back button listeners via Capacitor (`App.addListener('backButton')`).
+- **Interactive Doctor Cards & Avatars**: Initial avatar circles, stat pills (`👥 Patients`, `⭐ Rating`, `⏱️ Experience`), date horizontal pickers, and full-width CTA buttons.
+- **Micro-Interactions**: Press scaling (`scale(0.97)`), skeleton loaders, and mic pulsing animations during voice triage.
+
+### 3. 🚀 6-Step Onboarding Wizard
+- **First-Time User Walkthrough**: Automatically launches for new signups (`OnboardingWizard.jsx`):
+  1. Welcome & Capability Overview
+  2. Basic Personal Bio Setup (Blood Group, Gender, DOB)
+  3. Medical Background (Allergies, Pre-Existing Conditions, Meds)
+  4. Emergency Contact Details & Address
+  5. Location & Voice Microphone Permissions Setup
+  6. Completion Celebration & Dashboard Launch
+- **Local Persistence**: Remembers completed state (`localStorage.getItem('mediguide_onboarded')`).
+
+### 4. 🏥 Dual-Source Healthcare Facilities & Map (Leaflet / OpenStreetMap)
+- **🟢 Type A: Registered MediGuide Partner Organizations**:
+  - Registered healthcare centers with direct in-app doctor session booking.
+  - **Verified In-App Patient Reviews**: View verified ratings/reviews and submit new 1-5 star patient reviews.
+- **🔵 Type B: Nearby Google Maps Public Facilities**:
+  - Dynamically fetched based on the patient's live GPS coordinates.
+  - Displays Google star ratings, public review counts, place snippets, direct phone calls, and directions.
+- **Interactive Filter Pills**: Segmented pill control (`All Facilities`, `🟢 MediGuide Partners`, `🔵 Google Maps`) that dynamically filters both card carousels and map markers in real-time.
+
+### 5. 📋 Deep Patient Medical Profile Context Integration
 - **Complete Health Background Sync**: Evaluates reported symptoms against:
   - **Pregnancy / Nursing Status** (*1st, 2nd, 3rd Trimester, Breastfeeding, N/A*)
   - **Pre-existing Chronic Diseases** (*Asthma, Hypertension, Diabetes, etc.*)
@@ -21,23 +49,14 @@ MediGuide is an intelligent, user-centric healthcare navigation platform designe
   - **Long-Term Treatments / Therapies** (*Chemotherapy, Dialysis, etc.*)
   - **Known Allergies & Drug Sensitivities** (*Penicillin, NSAIDs, etc.*)
   - **Age, Gender, Height, Weight, Blood Group, Home Address & Emergency Contact**.
-- **100% Editable Profile**: All fields are fully updatable by the patient while keeping account identity email locked.
+- **100% Editable Profile**: Grouped section cards with locked account email visual indicator.
 
-### 3. 🏥 Dual-Source Healthcare Facilities & Map (Leaflet / OpenStreetMap)
-- **🟢 Type A: Registered MediGuide Partner Organizations**:
-  - Registered healthcare centers with direct in-app doctor session booking.
-  - **Verified In-App Patient Reviews**: Patients can view verified ratings/reviews and submit new 1-5 star reviews.
-- **🔵 Type B: Nearby Google Maps Public Facilities**:
-  - Dynamically fetched based on the patient's live GPS coordinates.
-  - Displays Google star ratings, public review counts, place snippets, direct phone calls, and directions.
-- **Filter Tabs**: Toggle between *All Facilities*, *🟢 MediGuide Partners*, and *🔵 Google Maps Facilities*.
-
-### 4. 💬 Multi-Session Chat & History Management
+### 6. 💬 Multi-Session Chat & History Management
 - **Persistent Chat Sessions**: Create multiple consultation chats (*"+ New Consultation"*) and switch between them in the slide-out history drawer.
 - **Front-Screen Access**: Resume recent consultations directly from the main Patient Home dashboard.
 
-### 5. 🎤 Native Voice Input (Speech-to-Text)
-- **Web Speech API Integration**: Tap the microphone icon to speak symptoms live.
+### 7. 🎤 Native Voice Input (Speech-to-Text)
+- **Web Speech API Integration**: Tap the microphone icon to speak symptoms live with `@keyframes pulseMic` recording feedback.
 - **100% Android APK / Capacitor Compatibility**: Works natively inside Android WebViews with microphone permission.
 
 ---
@@ -46,10 +65,11 @@ MediGuide is an intelligent, user-centric healthcare navigation platform designe
 
 ### Frontend
 - **Framework**: React 18 (Vite)
+- **Mobile Native Bridge**: Capacitor v7 (`@capacitor/core`, `@capacitor/app`, `@capacitor/android`)
 - **Routing**: React Router v6
 - **Maps**: Leaflet & React-Leaflet (OpenStreetMap Tiles)
 - **Voice Recognition**: Native Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`)
-- **Styling**: CSS Modules with modern responsive layout
+- **Styling**: CSS Modules with modern responsive layout & Design Tokens (`index.css`)
 
 ### Backend
 - **Runtime**: Node.js & Express.js
@@ -75,13 +95,16 @@ Mediguide/
 │   ├── package.json
 │   └── server.js            # Node/Express server entry point
 ├── frontend/
+│   ├── android/             # Capacitor Android Native Project Scaffold
 │   ├── src/
-│   │   ├── components/      # HospitalMap, MedicalProfileEditor, Spinner, etc.
+│   │   ├── components/      # HospitalMap, MedicalProfileEditor, OnboardingWizard, Spinner, etc.
 │   │   ├── context/         # AuthContext & PatientContext
 │   │   ├── pages/           # Patient Home, Triage, Profile, Slots, Admin, Org
 │   │   ├── services/        # API service layer (fetch wrappers)
 │   │   ├── App.jsx          # Route definitions & providers
+│   │   ├── index.css        # Design tokens & global CSS variables
 │   │   └── main.jsx         # React DOM entry point
+│   ├── capacitor.config.json # Capacitor mobile config (App ID: com.mediguide.app)
 │   ├── package.json
 │   └── vite.config.js
 └── README.md
@@ -181,30 +204,26 @@ npm run dev
 
 ---
 
-## 📱 Android APK Build (Capacitor)
+## 📱 Android Native App Build (Capacitor)
 
-MediGuide is built mobile-first and can be compiled into a native Android APK using Capacitor:
+The repository includes a pre-configured native Android scaffold (`frontend/android`) with Capacitor plugins:
 
-1. Add Capacitor to frontend:
-   ```bash
-   cd frontend
-   npm install @capacitor/core @capacitor/cli @capacitor/android
-   npx cap init MediGuide com.mediguide.app --web-dir dist
-   ```
-2. Build frontend assets:
-   ```bash
-   npm run build
-   npx cap add android
-   npx cap copy
-   ```
-3. Grant Microphone Permission in `android/app/src/main/AndroidManifest.xml`:
-   ```xml
-   <uses-permission android:name="android.permission.RECORD_AUDIO" />
-   ```
-4. Open in Android Studio to build APK:
-   ```bash
-   npx cap open android
-   ```
+### 1. Build Web Production Assets
+```bash
+cd frontend
+npm run build
+```
+
+### 2. Copy Web Assets to Native Android
+```bash
+npx cap copy
+```
+
+### 3. Open in Android Studio
+```bash
+npx cap open android
+```
+From Android Studio, click **Build > Build APK(s)** or run on an emulator/device.
 
 ---
 

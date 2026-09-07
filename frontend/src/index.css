@@ -1,4 +1,4 @@
-/* ── Global Resets ──────────────────────────────────────────── */
+/* ── Global Resets & Typography ──────────────────────────────── */
 *,
 *::before,
 *::after {
@@ -16,13 +16,12 @@ body,
 }
 
 body {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
-    Arial, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  color: #1f2937;
-  background: #ffffff;
+  color: var(--color-text-primary);
+  background: var(--color-surface);
   line-height: 1.5;
 }
 
@@ -45,6 +44,13 @@ a {
 button {
   cursor: pointer;
   font: inherit;
+  border: none;
+  background: none;
+}
+
+button:active {
+  transform: scale(0.97);
+  transition: transform 0.1s ease;
 }
 
 input,
@@ -53,47 +59,68 @@ textarea {
   font: inherit;
 }
 
-/* ── Theme Variables ────────────────────────────────────────── */
+/* ── Figma Design Tokens ────────────────────────────────────── */
 :root {
-  --teal-50: #f0fdfa;
-  --teal-100: #ccfbf1;
-  --teal-200: #99f6e4;
-  --teal-500: #14b8a6;
-  --teal-600: #0d9488;
-  --teal-700: #0f766e;
-  --teal-800: #115e59;
-  --emerald-50: #ecfdf5;
-  --emerald-400: #34d399;
-  --emerald-600: #059669;
-  --emerald-700: #047857;
-  --gray-50: #f9fafb;
-  --gray-100: #f3f4f6;
-  --gray-200: #e5e7eb;
-  --gray-300: #d1d5db;
-  --gray-400: #9ca3af;
-  --gray-500: #6b7280;
-  --gray-600: #4b5563;
-  --gray-700: #374151;
-  --gray-800: #1f2937;
-  --gray-900: #111827;
-  --red-50: #fef2f2;
-  --red-100: #fee2e2;
-  --red-200: #fecaca;
-  --red-500: #ef4444;
-  --red-600: #dc2626;
-  --red-700: #b91c1c;
-  --red-800: #991b1b;
-  --green-50: #f0fdf4;
-  --green-100: #dcfce7;
-  --green-200: #bbf7d0;
-  --green-500: #22c55e;
-  --green-600: #16a34a;
-  --green-700: #15803d;
-  --amber-100: #fef3c7;
-  --amber-700: #b45309;
-  --blue-50: #eff6ff;
-  --blue-100: #dbeafe;
-  --blue-600: #2563eb;
-  --blue-700: #1d4ed8;
-  --blue-800: #1e40af;
+  /* Core Colors */
+  --color-primary: #0F9C8E;
+  --color-primary-light: #5FD3C4;
+  --color-primary-gradient: linear-gradient(135deg, #0F9C8E 0%, #5FD3C4 100%);
+  --color-accent: #FF8A65;
+  --color-surface: #F6FBFA;
+  --color-card: #FFFFFF;
+  --color-text-primary: #1A1F1E;
+  --color-text-muted: #6B7876;
+  --color-danger: #E53E3E;
+  --color-border: #E2ECE9;
+
+  /* Border Radius */
+  --radius-card: 18px;
+  --radius-pill: 999px;
+  --radius-action: 12px;
+
+  /* Shadows & Elevation */
+  --shadow-soft: 0 4px 16px rgba(15, 156, 142, 0.10);
+  --shadow-hover: 0 8px 24px rgba(15, 156, 142, 0.15);
+
+  /* Spacing Scale (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* Animation Tokens */
+  --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Card Entry Animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Skeleton Placeholder Animations */
+@keyframes pulseSkeleton {
+  0% { opacity: 0.6; }
+  50% { opacity: 0.3; }
+  100% { opacity: 0.6; }
+}
+
+.skeleton-box {
+  background: #E2ECE9;
+  border-radius: var(--radius-action);
+  animation: pulseSkeleton 1.5s infinite ease-in-out;
 }
