@@ -500,3 +500,23 @@
 .footerAdmin:hover {
   color: #0d9488;
 }
+
+/* ── Mobile: Show hero only, hide scrollable sections ──────── */
+@media (max-width: 768px) {
+  .featuresSection,
+  .howSection,
+  .ctaSection,
+  .footer {
+    display: none;
+  }
+
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+  }
+
+  .heroInner {
+    width: 100%;
+  }
+}

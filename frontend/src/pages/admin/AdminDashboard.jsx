@@ -1,25 +1,28 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import * as api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import ErrorToast from '../../components/ErrorToast';
 import styles from './AdminDashboard.module.css';
 
-const ADMIN_PASSWORD = 'admin123';
-
 function AdminDashboard() {
+  const navigate = useNavigate();
+  const { user: authUser, token } = useAuth();
+
   const [authenticated, setAuthenticated] = useState(() => {
+    if (authUser?.role === 'admin') return true;
     try {
       const storedUser = localStorage.getItem('mediguide_patient');
-      const token = localStorage.getItem('token');
       if (storedUser) {
         const u = JSON.parse(storedUser);
-        if (u.role === 'admin') return true;
+        return u.role === 'admin';
       }
-      return !!token;
+      return false;
     } catch {
       return false;
     }
   });
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
   const [orgs, setOrgs] = useState([]);
@@ -27,10 +30,19 @@ function AdminDashboard() {
   const [actionInProgress, setActionInProgress] = useState(null);
   const [error, setError] = useState('');
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (password === ADMIN_PASSWORD || password === 'adminpassword123') { setAuthenticated(true); setAuthError(''); }
-    else { setAuthError('Incorrect password.'); }
+    setAuthError('');
+    try {
+      const { user, token: newToken } = await api.login(email, password);
+      if (user?.role === 'admin') {
+        setAuthenticated(true);
+      } else {
+        setAuthError('Access denied. Admin role required.');
+      }
+    } catch (err) {
+      setAuthError(err.message || 'Login failed. Please check your credentials.');
+    }
   };
 
   const fetchOrgs = async () => {
@@ -43,16 +55,8 @@ function AdminDashboard() {
   };
 
   useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem('mediguide_patient');
-      if (storedUser) {
-        const u = JSON.parse(storedUser);
-        if (u.role === 'admin') setAuthenticated(true);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  }, []);
+    if (authUser?.role === 'admin') setAuthenticated(true);
+  }, [authUser]);
 
   useEffect(() => { if (authenticated) fetchOrgs(); }, [authenticated]);
 
@@ -77,13 +81,16 @@ function AdminDashboard() {
           <p className={styles.loginSubtext}>Enter the admin password to continue.</p>
           <form onSubmit={handleLogin} className={styles.loginForm}>
             <div>
+              <label className={styles.fieldLabel}>Email</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@mediguide.com" className={styles.input} autoFocus required />
+            </div>
+            <div style={{ marginTop: '0.75rem' }}>
               <label className={styles.fieldLabel}>Password</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter admin password" className={styles.input} autoFocus />
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter admin password" className={styles.input} required />
             </div>
             {authError && <p className={styles.errorMsg}>{authError}</p>}
             <button type="submit" className={styles.loginBtn}>Unlock Dashboard</button>
           </form>
-          <p className={styles.demoHint}>Demo password: <code className={styles.demoCode}>admin123</code></p>
         </div>
       </div>
     );

@@ -10,6 +10,7 @@ const getApiBaseUrl = () => {
 };
 
 const API_BASE_URL = getApiBaseUrl();
+export { API_BASE_URL };
 
 // ============================================================
 // Health Check
@@ -178,7 +179,7 @@ export const signup = async (email, password, role = 'user', name = '') => {
     if (res.message) throw new Error(res.message);
   } catch (err) {
     if (err.message && err.message !== 'Failed to fetch') throw err;
-    console.warn('Backend server unreachable, using fallback signup', err);
+    // Backend unreachable, using fallback signup
   }
 
   await delay();
@@ -201,7 +202,7 @@ export const login = async (email, password, expectedRole = '') => {
     if (res.message) throw new Error(res.message);
   } catch (err) {
     if (err.message && err.message !== 'Failed to fetch') throw err;
-    console.warn('Backend server unreachable, using fallback login', err);
+    // Backend unreachable, using fallback login
   }
 
   await delay();
@@ -291,7 +292,7 @@ export const submitTriageSymptom = async (text, patientProfile = null, chatHisto
       return resData.data;
     }
   } catch (err) {
-    console.warn('AI Triage API network error, utilizing local evaluator', err);
+    // AI Triage API network error, using local evaluator
   }
 
   const lower = text.toLowerCase();
@@ -418,6 +419,23 @@ export const uploadTestReport = async (file) => {
   };
   mockReports.push(report);
   return { report };
+};
+
+export const deleteTestReport = async (reportId) => {
+  await delay();
+  const idx = mockReports.findIndex((r) => r.id === reportId);
+  if (idx === -1) throw new Error('Report not found');
+  mockReports.splice(idx, 1);
+  return { success: true };
+};
+
+export const renameTestReport = async (reportId, newFile) => {
+  await delay();
+  const report = mockReports.find((r) => r.id === reportId);
+  if (!report) throw new Error('Report not found');
+  report.filename = newFile.name || 'report.pdf';
+  report.uploadedAt = new Date().toISOString();
+  return { report: { ...report } };
 };
 
 let mockEmergencyContact = null;
