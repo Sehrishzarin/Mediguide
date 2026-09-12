@@ -88,92 +88,115 @@ function PatientHome() {
       {/* Onboarding Wizard Modal if new user */}
       {showOnboarding && <OnboardingWizard onComplete={() => setShowOnboarding(false)} />}
 
-      {/* Hero Header Banner with Primary Teal Gradient */}
-      <div className={styles.heroPanel}>
-        <div className={styles.heroHeaderRow}>
-          <div>
-            <span className={styles.welcomePill}>👋 Hello & Welcome</span>
-            <h1 className={styles.heroTitle}>
-              {user?.name ? user.name : 'Patient User'}
-            </h1>
-            <p className={styles.heroSubtitle}>
-              Your AI-guided health triage & emergency navigation hub.
-            </p>
-          </div>
-          <div className={styles.heroAvatarCircle}>
-            <svg width="28" height="28" fill="none" stroke="#0F9C8E" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      {/* Horizontally Scrollable Category Pills Row */}
-      <div className={styles.categoryScrollRow}>
-        {CATEGORY_CHIPS.map((chip) => (
-          <button
-            key={chip.key}
-            type="button"
-            className={`${styles.categoryPill} ${activeCategory === chip.key ? styles.activeCategoryPill : ''}`}
-            onClick={() => setActiveCategory(chip.key)}
-          >
-            <span>{chip.icon}</span>
-            <span>{chip.label}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Action Navigation Cards */}
-      <div className={styles.actionsList}>
-        {ACTIONS.map((action) => (
-          <Link key={action.label} to={action.to} className={styles.elevatedCard}>
-            <div className={styles.cardLeftBadge} style={{ background: action.badgeBg, color: action.iconColor }}>
-              {action.icon}
-            </div>
-            <div className={styles.cardBody}>
-              <h3 className={styles.cardTitle}>{action.label}</h3>
-              <p className={styles.cardDesc}>{action.description}</p>
-            </div>
-            <div className={styles.cardChevron}>
-              <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-              </svg>
-            </div>
-          </Link>
-        ))}
-      </div>
-
-      {/* DUAL SOURCE HEALTHCARE MAP DIRECTLY ON FRONT SCREEN */}
-      <div style={{ marginTop: '1.25rem' }}>
-        <HospitalMap onSelectBooking={handleSelectBooking} />
-      </div>
-
-      {/* Recent Consultation Chats Section */}
-      <div className={styles.recentConsultationsCard}>
-        <div className={styles.recentHeaderRow}>
-          <h3 className={styles.recentTitle}>💬 Recent AI Consultations</h3>
-          <Link to="/patient/triage?new=true" className={styles.btnStartNewLink}>+ Start New</Link>
-        </div>
-
-        {recentChats.length === 0 ? (
-          <p className={styles.emptyRecentText}>No recent consultations yet. Click above to describe any symptoms!</p>
-        ) : (
-          <div className={styles.recentList}>
-            {recentChats.map((chat) => (
-              <div
-                key={chat.id}
-                onClick={() => navigate(`/patient/triage?session=${chat.id}`)}
-                className={styles.recentItem}
-              >
-                <div className={styles.recentItemBody}>
-                  <strong className={styles.recentItemTitle}>💬 {chat.title}</strong>
-                  <span className={styles.recentItemMeta}>{new Date(chat.createdAt).toLocaleDateString()} • {chat.messages?.length || 0} messages</span>
-                </div>
-                <span className={styles.resumeArrow}>Resume &rarr;</span>
+      <div className={styles.portalGrid}>
+        {/* Main Column (Hero, Categories, Action Cards & Recent Consultations) */}
+        <div className={styles.portalMainCol}>
+          {/* Hero Header Banner with Primary Teal Gradient */}
+          <div className={styles.heroPanel}>
+            <div className={styles.heroHeaderRow}>
+              <div>
+                <span className={styles.welcomePill}>👋 Hello & Welcome</span>
+                <h1 className={styles.heroTitle}>
+                  {user?.name ? user.name : 'Patient User'}
+                </h1>
+                <p className={styles.heroSubtitle}>
+                  Your AI-guided health triage & emergency navigation hub.
+                </p>
               </div>
+              <div className={styles.heroAvatarCircle}>
+                <svg width="28" height="28" fill="none" stroke="#0F9C8E" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Category Chips Row */}
+          <div className={styles.categoryScrollRow}>
+            {CATEGORY_CHIPS.map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                className={`${styles.categoryPill} ${activeCategory === chip.key ? styles.activeCategoryPill : ''}`}
+                onClick={() => setActiveCategory(chip.key)}
+              >
+                <span>{chip.icon}</span>
+                <span>{chip.label}</span>
+              </button>
             ))}
           </div>
-        )}
+
+          {/* Action Navigation Cards */}
+          <div className={styles.actionsList}>
+            {ACTIONS.map((action) => (
+              <Link key={action.label} to={action.to} className={styles.elevatedCard}>
+                <div className={styles.cardLeftBadge} style={{ background: action.badgeBg, color: action.iconColor }}>
+                  {action.icon}
+                </div>
+                <div className={styles.cardBody}>
+                  <h3 className={styles.cardTitle}>{action.label}</h3>
+                  <p className={styles.cardDesc}>{action.description}</p>
+                </div>
+                <div className={styles.cardChevron}>
+                  <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                  </svg>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {/* Recent Consultation Chats Section */}
+          <div className={styles.recentConsultationsCard}>
+            <div className={styles.recentHeaderRow}>
+              <h3 className={styles.recentTitle}>💬 Recent AI Consultations</h3>
+              <Link to="/patient/triage?new=true" className={styles.btnStartNewLink}>+ Start New</Link>
+            </div>
+
+            {recentChats.length === 0 ? (
+              <p className={styles.emptyRecentText}>No recent consultations yet. Click above to describe any symptoms!</p>
+            ) : (
+              <div className={styles.recentList}>
+                {recentChats.map((chat) => (
+                  <div
+                    key={chat.id}
+                    onClick={() => navigate(`/patient/triage?session=${chat.id}`)}
+                    className={styles.recentItem}
+                  >
+                    <div className={styles.recentItemBody}>
+                      <strong className={styles.recentItemTitle}>💬 {chat.title}</strong>
+                      <span className={styles.recentItemMeta}>{new Date(chat.createdAt).toLocaleDateString()} • {chat.messages?.length || 0} messages</span>
+                    </div>
+                    <span className={styles.resumeArrow}>Resume &rarr;</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Side Column (Interactive Healthcare Map & Quick Profile Overview) */}
+        <div className={styles.portalSideCol}>
+          <div className={styles.mapPortalWrapper}>
+            <HospitalMap onSelectBooking={handleSelectBooking} />
+          </div>
+
+          <div className={styles.quickProfileWidget}>
+            <div className={styles.quickProfileHeader}>
+              <div className={styles.quickProfileIcon}>📋</div>
+              <div>
+                <h4 className={styles.quickProfileTitle}>Medical Context Active</h4>
+                <p className={styles.quickProfileSub}>Evaluated during AI Triage</p>
+              </div>
+            </div>
+            <div className={styles.quickProfileBadges}>
+              <span className={styles.profileBadgeTag}>Blood: {user?.medicalProfile?.bloodGroup || user?.bloodGroup || user?.bloodType || 'O+'}</span>
+              <span className={styles.profileBadgeTag}>Gender: {user?.medicalProfile?.gender || user?.gender || 'Not specified'}</span>
+              <span className={styles.profileBadgeTag}>Allergies: {(user?.medicalProfile?.allergies || user?.allergies || [])?.length || 'None'}</span>
+            </div>
+            <Link to="/patient/profile" className={styles.btnEditProfilePortal}>Edit Health Profile &rarr;</Link>
+          </div>
+        </div>
       </div>
     </div>
   );

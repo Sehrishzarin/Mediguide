@@ -308,24 +308,80 @@ export default function SymptomInput() {
   }
 
   return (
-    <div className={styles.triageLayout}>
-      {/* Top Action Header Bar */}
-      <div className={styles.topControlBar}>
-        <button
-          type="button"
-          className={styles.btnHistoryToggle}
-          onClick={() => navigate('/patient/history')}
-        >
-          💬 Chat History ({sessions.length})
-        </button>
+    <div className={styles.messengerLayout}>
+      {/* ── Left Messenger History Panel ── */}
+      <aside className={styles.messengerHistoryPanel}>
+        <div className={styles.historyPanelHeader}>
+          <div className={styles.historyHeaderTitleGroup}>
+            <h3 className={styles.historyPanelTitle}>💬 Consultations</h3>
+            <span className={styles.sessionCountBadge}>{sessions.length}</span>
+          </div>
+          <button
+            type="button"
+            className={styles.btnNewConsult}
+            onClick={createNewChatSession}
+            title="Start New Consult"
+          >
+            + New Consult
+          </button>
+        </div>
 
-        <button type="button" className={styles.btnNewChat} onClick={createNewChatSession}>
-          + New Consultation
-        </button>
-      </div>
+        <div className={styles.historySessionList}>
+          {sessions.length === 0 ? (
+            <div className={styles.emptyHistoryState}>
+              <p>No consultations yet.</p>
+              <button
+                type="button"
+                className={styles.btnNewConsult}
+                onClick={createNewChatSession}
+              >
+                + Start Consultation
+              </button>
+            </div>
+          ) : (
+            sessions.map((s) => (
+              <div
+                key={s.id}
+                className={`${styles.sessionItemCard} ${s.id === activeSessionId ? styles.activeSessionCard : ''}`}
+                onClick={() => switchChatSession(s)}
+              >
+                <div className={styles.sessionIconCircle}>💬</div>
+                <div className={styles.sessionCardBody}>
+                  <strong className={styles.sessionTitle}>{s.title}</strong>
+                  <span className={styles.sessionMeta}>
+                    {new Date(s.createdAt).toLocaleDateString()} • {s.messages?.length || 0} msgs
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className={styles.btnDeleteSession}
+                  onClick={(e) => deleteChatSession(e, s.id)}
+                  title="Delete consultation"
+                >
+                  ✕
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </aside>
 
-      {/* Main Chat Thread */}
-      <div className={styles.chatContainer}>
+      {/* ── Right Messenger Chat Panel ── */}
+      <main className={styles.messengerChatPanel}>
+        {/* Top Chat Header */}
+        <div className={styles.chatHeaderBar}>
+          <div>
+            <h3 className={styles.chatSessionHeading}>
+              {sessions.find((s) => s.id === activeSessionId)?.title || 'New Consult'}
+            </h3>
+            <span className={styles.chatStatusSub}>AI Clinical Counseling & Triage</span>
+          </div>
+          <button type="button" className={styles.btnHeaderNewConsult} onClick={createNewChatSession}>
+            + New Consult
+          </button>
+        </div>
+
+        {/* Chat Thread Area */}
         <div className={styles.chatThread}>
           {messages.map((msg) => (
             <div
@@ -422,7 +478,7 @@ export default function SymptomInput() {
           </div>
         )}
 
-        {/* Dynamic Action Buttons */}
+        {/* Dynamic Action Control Bar */}
         <div className={styles.mapToggleBar}>
           <button
             type="button"
@@ -453,7 +509,7 @@ export default function SymptomInput() {
           )}
         </div>
 
-        {/* Continuous Input Field with Microphone Voice Input */}
+        {/* Continuous Input Field with Speech Recognition */}
         <div className={styles.inputArea}>
           <button
             type="button"
@@ -467,7 +523,7 @@ export default function SymptomInput() {
           <input
             type="text"
             className={styles.textInput}
-            placeholder={isListening ? 'Listening to voice...' : 'Type or speak symptoms...'}
+            placeholder={isListening ? 'Listening to voice...' : 'Type or speak symptoms for consult...'}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -485,7 +541,7 @@ export default function SymptomInput() {
             </svg>
           </button>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

@@ -148,13 +148,25 @@ let mockBookings = [];
 let mockProfile = {
   id: 'u1',
   name: 'Jane Patient',
-  email: 'patient@example.com',
+  email: 'user@mediguide.com',
   phone: '+1-555-0100',
-  dob: '1990-04-15',
+  dob: '1995-04-15',
+  dateOfBirth: '1995-04-15',
   bloodType: 'O+',
+  bloodGroup: 'O+',
+  gender: 'Female',
+  pregnancyStatus: 'Not Pregnant',
   address: '789 Elm St, Capital City',
+  allergies: ['Penicillin'],
+  preExistingConditions: ['Asthma'],
+  pastConditions: ['Asthma'],
   ongoingMedications: ['Metformin 500mg', 'Vitamin D3'],
-  pastConditions: ['Appendicitis (2019)', 'Chickenpox (childhood)'],
+  medications: ['Metformin 500mg', 'Vitamin D3'],
+  emergencyContact: {
+    name: 'Sarah Smith',
+    relationship: 'Sister',
+    phone: '+1 555-0199'
+  },
   overallNotes: 'Mild lactose intolerance. Prefers morning appointments.',
 };
 
@@ -414,15 +426,38 @@ export const confirmBooking = async (slotId) => {
 
 export const getProfile = async () => {
   await delay();
+  let storedUser = null;
+  try {
+    const raw = localStorage.getItem('mediguide_patient') || localStorage.getItem('mediguide_user');
+    if (raw) storedUser = JSON.parse(raw);
+  } catch {}
+
+  const activeProfile = storedUser ? { ...mockProfile, ...storedUser, ...(storedUser.medicalProfile || {}) } : mockProfile;
   return {
-    profile: { ...mockProfile },
+    profile: { ...activeProfile },
     reports: mockReports.map((r) => ({ ...r })),
   };
 };
 
 export const updateProfile = async (data) => {
   await delay();
-  mockProfile = { ...mockProfile, ...data };
+  mockProfile = { ...mockProfile, ...data, ...(data.medicalProfile || {}) };
+  try {
+    const raw = localStorage.getItem('mediguide_patient') || localStorage.getItem('mediguide_user');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const updated = {
+        ...parsed,
+        ...data,
+        medicalProfile: {
+          ...(parsed.medicalProfile || {}),
+          ...(data.medicalProfile || {})
+        }
+      };
+      localStorage.setItem('mediguide_patient', JSON.stringify(updated));
+      localStorage.setItem('mediguide_user', JSON.stringify(updated));
+    }
+  } catch {}
   return { profile: { ...mockProfile } };
 };
 

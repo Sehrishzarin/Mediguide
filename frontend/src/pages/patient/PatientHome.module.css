@@ -1,9 +1,116 @@
 /* ── Patient Home Dashboard Styles ──────────────────────────── */
 
 .container {
-  max-width: 600px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 1rem;
+  padding: 0;
+}
+
+.portalGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+@media (min-width: 900px) {
+  .portalGrid {
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+}
+
+.portalMainCol {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.portalSideCol {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.mapPortalWrapper {
+  background: #ffffff;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+}
+
+.quickProfileWidget {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 1.125rem 1.25rem;
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.quickProfileHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.quickProfileIcon {
+  font-size: 1.5rem;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #F0FDFA;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #CCFBF1;
+}
+
+.quickProfileTitle {
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.quickProfileSub {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.quickProfileBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.profileBadgeTag {
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  border: 1px solid var(--color-border);
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-pill);
+}
+
+.btnEditProfilePortal {
+  display: inline-block;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: var(--transition-fast);
+}
+
+.btnEditProfilePortal:hover {
+  color: var(--color-primary-dark);
 }
 
 /* Rounded Gradient Hero Panel */

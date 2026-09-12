@@ -122,15 +122,20 @@ function PatientProfile() {
         setName(currentData?.name || '');
         setPhone(currentData?.phone || '');
         setAddress(currentData?.address || '');
-        setDob(med.dateOfBirth || currentData?.dob || '');
-        setBloodType(med.bloodGroup || currentData?.bloodType || '');
-        setGender(med.gender || '');
-        setPregnancyStatus(med.pregnancyStatus || 'N/A');
-        setMedications(med.currentMedications?.map(m => typeof m === 'string' ? m : m.name) || currentData?.ongoingMedications || []);
-        setConditions(med.preExistingConditions || currentData?.pastConditions || []);
-        setAllergies(med.allergies || []);
-        setNotes(currentData?.overallNotes || '');
-        setEmergencyContact(med.emergencyContact || { name: '', relationship: '', phone: '' });
+        setDob(med.dateOfBirth || currentData?.dateOfBirth || currentData?.dob || '');
+        setBloodType(med.bloodGroup || currentData?.bloodGroup || currentData?.bloodType || '');
+        setGender(med.gender || currentData?.gender || '');
+        setPregnancyStatus(med.pregnancyStatus || currentData?.pregnancyStatus || 'N/A');
+        
+        const rawMeds = med.currentMedications || currentData?.medications || currentData?.ongoingMedications || [];
+        setMedications(rawMeds.map(m => typeof m === 'string' ? m : (m.name || m)));
+        
+        const rawConds = med.preExistingConditions || currentData?.preExistingConditions || currentData?.pastConditions || [];
+        setConditions(rawConds);
+        
+        setAllergies(med.allergies || currentData?.allergies || []);
+        setNotes(currentData?.overallNotes || currentData?.notes || '');
+        setEmergencyContact(med.emergencyContact || currentData?.emergencyContact || { name: '', relationship: '', phone: '' });
 
         const { reports: reps } = await api.getProfile();
         setReports(reps || []);
@@ -165,8 +170,18 @@ function PatientProfile() {
         currentMedications: formattedMedications,
         emergencyContact
       },
+      bloodGroup: bloodType,
+      bloodType: bloodType,
+      dateOfBirth: dob,
+      dob: dob,
+      gender,
+      pregnancyStatus,
       ongoingMedications: medications,
+      medications,
       pastConditions: conditions,
+      preExistingConditions: conditions,
+      allergies,
+      emergencyContact,
       overallNotes: notes
     };
 
@@ -176,15 +191,14 @@ function PatientProfile() {
       }
       await api.updateProfile(updatePayload);
 
-      // Update patient context
+      // Update patient context and localStorage
       const updatedUser = {
-        ...user,
-        name,
-        phone,
-        address,
-        medicalProfile: updatePayload.medicalProfile
+        ...(user || {}),
+        ...updatePayload
       };
       login(updatedUser);
+      localStorage.setItem('mediguide_patient', JSON.stringify(updatedUser));
+      localStorage.setItem('mediguide_user', JSON.stringify(updatedUser));
 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);

@@ -43,27 +43,48 @@ export default function OnboardingWizard({ onComplete }) {
     localStorage.setItem('mediguide_onboarded', 'true');
     localStorage.removeItem('mediguide_just_signed_up');
     
-    // Save collected basic health profile if user provided info
+    const allergiesList = allergiesInput ? allergiesInput.split(',').map(s => s.trim()).filter(Boolean) : user?.medicalProfile?.allergies || [];
+    const conditionsList = conditionsInput ? conditionsInput.split(',').map(s => s.trim()).filter(Boolean) : user?.medicalProfile?.preExistingConditions || [];
+    const medsList = medsInput ? medsInput.split(',').map(s => s.trim()).filter(Boolean) : user?.medicalProfile?.currentMedications || [];
+
     const updatedProfile = {
       ...user,
       address: address || user?.address,
+      bloodGroup: bloodGroup || user?.medicalProfile?.bloodGroup || user?.bloodGroup,
+      bloodType: bloodGroup || user?.medicalProfile?.bloodGroup || user?.bloodType,
+      dateOfBirth: dateOfBirth || user?.medicalProfile?.dateOfBirth || user?.dob,
+      dob: dateOfBirth || user?.medicalProfile?.dateOfBirth || user?.dob,
+      gender: gender || user?.medicalProfile?.gender || user?.gender,
+      allergies: allergiesList,
+      preExistingConditions: conditionsList,
+      pastConditions: conditionsList,
+      ongoingMedications: medsList,
+      medications: medsList,
+      emergencyContact: {
+        name: emergencyName || user?.medicalProfile?.emergencyContact?.name || '',
+        phone: emergencyPhone || user?.medicalProfile?.emergencyContact?.phone || '',
+        relationship: emergencyRel || user?.medicalProfile?.emergencyContact?.relationship || ''
+      },
       medicalProfile: {
         ...(user?.medicalProfile || {}),
         bloodGroup: bloodGroup || user?.medicalProfile?.bloodGroup,
         gender: gender || user?.medicalProfile?.gender,
         dateOfBirth: dateOfBirth || user?.medicalProfile?.dateOfBirth,
-        allergies: allergiesInput ? allergiesInput.split(',').map(s => s.trim()).filter(Boolean) : user?.medicalProfile?.allergies || [],
-        preExistingConditions: conditionsInput ? conditionsInput.split(',').map(s => s.trim()).filter(Boolean) : user?.medicalProfile?.preExistingConditions || [],
+        allergies: allergiesList,
+        preExistingConditions: conditionsList,
+        currentMedications: medsList.map(m => typeof m === 'string' ? { name: m, dosage: '', frequency: '' } : m),
         emergencyContact: {
-          name: emergencyName,
-          phone: emergencyPhone,
-          relationship: emergencyRel
+          name: emergencyName || user?.medicalProfile?.emergencyContact?.name || '',
+          phone: emergencyPhone || user?.medicalProfile?.emergencyContact?.phone || '',
+          relationship: emergencyRel || user?.medicalProfile?.emergencyContact?.relationship || ''
         }
       }
     };
 
     if (login) {
       login(updatedProfile);
+      localStorage.setItem('mediguide_patient', JSON.stringify(updatedProfile));
+      localStorage.setItem('mediguide_user', JSON.stringify(updatedProfile));
     }
 
     if (onComplete) {
