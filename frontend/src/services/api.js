@@ -1,5 +1,5 @@
 // ============================================================
-// API Base URL — reads from env or falls back to localhost
+// API Base URL — reads from env or falls back to /api or localhost:5000
 // ============================================================
 
 const getApiBaseUrl = () => {
@@ -12,14 +12,24 @@ const getApiBaseUrl = () => {
 const API_BASE_URL = getApiBaseUrl();
 export { API_BASE_URL };
 
+// Helper function to safely fetch JSON and avoid unexpected HTML parsing errors
+const safeJsonFetch = async (url, options = {}) => {
+  const response = await fetch(url, options);
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await response.text();
+    throw new Error(`Server returned non-JSON response (${response.status}): ${text.substring(0, 100)}`);
+  }
+  return await response.json();
+};
+
 // ============================================================
 // Health Check
 // ============================================================
 
 export const checkHealth = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/health`);
-    return await response.json();
+    return await safeJsonFetch(`${API_BASE_URL}/health`);
   } catch (error) {
     console.error('Error reaching backend server:', error);
     throw error;
@@ -31,36 +41,33 @@ export const checkHealth = async () => {
 // ============================================================
 
 export const loginUser = async (email, password) => {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+  return await safeJsonFetch(`${API_BASE_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
   });
-  return await response.json();
 };
 
 export const registerUser = async (userData) => {
-  const response = await fetch(`${API_BASE_URL}/auth/register`, {
+  return await safeJsonFetch(`${API_BASE_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(userData)
   });
-  return await response.json();
 };
 
 export const getCurrentUserProfile = async (token) => {
-  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+  return await safeJsonFetch(`${API_BASE_URL}/auth/me`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`
     }
   });
-  return await response.json();
 };
 
 export const updateUserProfile = async (token, profileData) => {
-  const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+  return await safeJsonFetch(`${API_BASE_URL}/auth/profile`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -68,7 +75,6 @@ export const updateUserProfile = async (token, profileData) => {
     },
     body: JSON.stringify(profileData)
   });
-  return await response.json();
 };
 
 // ============================================================
@@ -178,7 +184,7 @@ export const signup = async (email, password, role = 'user', name = '') => {
     }
     if (res.message) throw new Error(res.message);
   } catch (err) {
-    if (err.message && err.message !== 'Failed to fetch') throw err;
+    if (err.message && !err.message.includes('non-JSON') && err.message !== 'Failed to fetch') throw err;
     // Backend unreachable, using fallback signup
   }
 
@@ -201,7 +207,7 @@ export const login = async (email, password, expectedRole = '') => {
     }
     if (res.message) throw new Error(res.message);
   } catch (err) {
-    if (err.message && err.message !== 'Failed to fetch') throw err;
+    if (err.message && !err.message.includes('non-JSON') && err.message !== 'Failed to fetch') throw err;
     // Backend unreachable, using fallback login
   }
 

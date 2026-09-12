@@ -1,3 +1,13 @@
+const dns = require('dns');
+try {
+  dns.setDefaultResultOrder('ipv4first');
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (e) {}
+
+const path = require('path');
+const dotenv = require('dotenv');
+dotenv.config({ path: path.join(__dirname, '../../.env') });
+
 const mongoose = require('mongoose');
 const Organization = require('../models/Organization');
 const User = require('../models/User');
@@ -92,7 +102,7 @@ const bulkOrganizations = [
 
 const seedBulkData = async () => {
   try {
-    const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/mediguide';
+    const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/mediguide';
     await mongoose.connect(mongoUri);
     console.log('🌱 Connected to MongoDB for Bulk Data Seeding...');
 
