@@ -12,11 +12,20 @@ body,
 #root {
   width: 100%;
   min-height: 100vh;
-  height: 100%;
+  min-height: 100dvh;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -123,4 +132,28 @@ textarea {
   background: #E2ECE9;
   border-radius: var(--radius-action);
   animation: pulseSkeleton 1.5s infinite ease-in-out;
+}
+
+/* ── Accessibility & touch ───────────────────────────────────── */
+:focus-visible {
+  outline: 3px solid rgba(15, 156, 142, 0.55);
+  outline-offset: 2px;
+}
+
+/* 16px minimum stops iOS Safari zooming into focused fields */
+input,
+select,
+textarea {
+  font-size: max(16px, 1em);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

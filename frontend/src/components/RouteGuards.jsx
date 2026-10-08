@@ -1,58 +1,40 @@
-import { Navigate, Outlet } from 'react-router-dom';
-import { usePatient } from '../pages/patient/PatientContext';
-import { useAuth } from '../context/AuthContext';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { useAuth, homeForRole } from '../context/AuthContext';
+import Spinner from './Spinner';
 
-// Protected Route Guard for Patient Screens (/patient/*)
-export function PatientProtectedGuard() {
-  const { user: patientUser } = usePatient();
-  const { user: authUser, token } = useAuth();
+function FullScreenLoader() {
+  return (
+    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+      <Spinner size="lg" />
+    </div>
+  );
+}
 
-  const storedPatient = (() => {
-    try {
-      return JSON.parse(localStorage.getItem('mediguide_patient'));
-    } catch {
-      return null;
-    }
-  })();
+// Requires a signed-in user with one of the given roles
+export function RequireRole({ roles }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
 
-  const storedToken = localStorage.getItem('token');
-
-  const isAuthenticated = Boolean(patientUser || authUser || storedPatient || (token && storedToken));
-
-  if (!isAuthenticated) {
-    return <Navigate to="/patient/login" replace />;
-  }
-
+  if (loading) return <FullScreenLoader />;
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!roles.includes(user.role)) return <Navigate to={homeForRole(user.role)} replace />;
   return <Outlet />;
 }
 
-// Guest-Only Route Guard (For Login / Signup screens)
-export function GuestOnlyGuard() {
-  const { user: patientUser } = usePatient();
-  const { user: authUser } = useAuth();
-
-  const storedPatient = (() => {
-    try {
-      return JSON.parse(localStorage.getItem('mediguide_patient'));
-    } catch {
-      return null;
-    }
-  })();
-
-  const storedToken = localStorage.getItem('token');
-
-  const isLoggedIn = Boolean(patientUser || authUser || storedPatient || storedToken);
-
-  if (isLoggedIn) {
-    const role = authUser?.role || patientUser?.role || 'user';
-    if (role === 'admin') {
-      return <Navigate to="/admin" replace />;
-    }
-    if (role === 'organization') {
-      return <Navigate to="/org/onboard" replace />;
-    }
-    return <Navigate to="/patient/home" replace />;
+// Patients must finish onboarding (saved on their account) before using the app
+export function RequireOnboarded() {
+  const { user } = useAuth();
+  const location = useLocation();
+  if (user && !user.onboardingCompleted && location.pathname !== '/patient/onboarding') {
+    return <Navigate to="/patient/onboarding" replace />;
   }
+  return <Outlet />;
+}
 
+// Login / signup: signed-in users are sent to their home instead
+export function GuestOnlyGuard() {
+  const { user, loading } = useAuth();
+  if (loading) return <FullScreenLoader />;
+  if (user) return <Navigate to={homeForRole(user.role)} replace />;
   return <Outlet />;
 }

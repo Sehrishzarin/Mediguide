@@ -1,729 +1,423 @@
-import { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
+import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Capacitor } from '@capacitor/core';
-import { Geolocation } from '@capacitor/geolocation';
-import * as api from '../services/api';
-import { API_BASE_URL } from '../services/api';
+import { fetchNearbyOrganizations, addOrganizationReview } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { DEFAULT_LOCATION, getPosition, mapsDirectionsUrl, formatDistance } from './geo';
 import styles from './HospitalMap.module.css';
 
-// Custom Map Pins: Green 🟢 for Registered MediGuide Partners, Blue 🔵 for Google Maps Public Facilities
-const createCustomIcon = (type, label, source = 'mediguide_partner') => {
-  const isPatient = type === 'patient';
-  const isPartner = source === 'mediguide_partner';
-  const color = isPatient ? '#2563eb' : isPartner ? '#0F9C8E' : '#0284c7';
-
-  const iconSvg = isPatient
-    ? `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><circle cx="12" cy="12" r="10" fill="#2563eb"/><circle cx="12" cy="12" r="4" fill="white"/></svg>`
-    : `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${color}"/><path d="M12 6v6M9 9h6" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>`;
-
-  const badgeColor = isPatient ? '#dbeafe' : isPartner ? '#f0fdfa' : '#e0f2fe';
-  const textColor = isPatient ? '#1e40af' : isPartner ? '#0f9c8e' : '#0369a1';
-  const iconLabel = isPatient ? '📍 You' : isPartner ? `🟢 ${label}` : `🔵 ${label}`;
-
-  return L.divIcon({
-    className: 'custom-map-pin',
-    html: `<div style="display:flex;flex-direction:column;align-items:center;">${iconSvg}<span style="background:${badgeColor};color:${textColor};font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;border:1px solid ${isPatient ? '#bfdbfe' : isPartner ? '#99f6e4' : '#bae6fd'};box-shadow:0 2px 4px rgba(0,0,0,0.15);white-space:nowrap;">${iconLabel}</span></div>`,
-    iconSize: [32, 48],
-    iconAnchor: [16, 48]
+// ---- Marker icons (divIcons, so Leaflet's default image icons are never needed) ----
+const pin = (color, size) =>
+  L.divIcon({
+    className: styles.pinWrap,
+    html: `<svg width="${size}" height="${size}" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${color}" stroke="#fff" stroke-width="1.5"/><path d="M12 6v6M9 9h6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size]
   });
+
+const ICONS = {
+  partner: pin('#0F9C8E', 32),
+  partnerActive: pin('#0B7A6F', 44),
+  public: pin('#2563EB', 32),
+  publicActive: pin('#1D4ED8', 44),
+  user: L.divIcon({
+    className: styles.pinWrap,
+    html: '<span class="' + styles.userDot + '"></span>',
+    iconSize: [22, 22],
+    iconAnchor: [11, 11]
+  })
 };
 
-function ChangeView({ center }) {
+const FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'partner', label: 'MediGuide partners' },
+  { key: 'public', label: 'Public facilities' }
+];
+
+const PAGE_SIZE = 5;
+
+const coordsOf = (org) => {
+  const [lng, lat] = org?.location?.coordinates || [];
+  return typeof lat === 'number' && typeof lng === 'number' ? [lat, lng] : null;
+};
+const telHref = (phone) => `tel:${String(phone).replace(/[^\d+]/g, '')}`;
+
+// Moves the map when the visible facilities or the selected one change
+function MapController({ points, focus }) {
   const map = useMap();
+
   useEffect(() => {
-    if (center) map.setView(center, 13);
-  }, [center, map]);
+    // Leaflet needs a size recalculation when the container was hidden/resized
+    const t = setTimeout(() => map.invalidateSize(), 200);
+    return () => clearTimeout(t);
+  }, [map]);
+
+  useEffect(() => {
+    if (points.length === 0) return;
+    map.invalidateSize();
+    if (points.length === 1) {
+      map.setView(points[0], 14);
+    } else {
+      map.fitBounds(L.latLngBounds(points), { padding: [28, 28], maxZoom: 14 });
+    }
+  }, [map, points]);
+
+  useEffect(() => {
+    if (focus) map.flyTo(focus, Math.max(map.getZoom(), 14), { duration: 0.6 });
+  }, [map, focus]);
+
   return null;
 }
 
-const CITY_PRESETS = [
-  { name: 'Islamabad', lat: 33.6844, lng: 73.0479 },
-  { name: 'Rawalpindi', lat: 33.5651, lng: 73.0169 },
-  { name: 'Lahore', lat: 31.5204, lng: 74.3587 },
-  { name: 'Karachi', lat: 24.8607, lng: 67.0011 },
-];
+const Stars = ({ value, size = 16 }) => (
+  <span className={styles.stars} aria-hidden="true" style={{ fontSize: size }}>
+    {[1, 2, 3, 4, 5].map((n) => (
+      <span key={n} className={n <= Math.round(value) ? styles.starOn : styles.starOff}>★</span>
+    ))}
+  </span>
+);
 
-export default function HospitalMap({ filterSpecialty = '', onSelectBooking = null }) {
-  // Default coordinates: Islamabad, Pakistan
-  const [patientCoords, setPatientCoords] = useState([33.6844, 73.0479]);
-  const [locationName, setLocationName] = useState('Islamabad, Pakistan');
-  const [locationStatus, setLocationStatus] = useState('requesting');
-  const [citySearchInput, setCitySearchInput] = useState('');
-  const [isSearchingCity, setIsSearchingCity] = useState(false);
+function ReviewSection({ org, onUpdated }) {
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
 
-  const [facilities, setFacilities] = useState([]);
-  const [activeSourceFilter, setActiveSourceFilter] = useState('all'); // 'all' | 'partner' | 'google'
-  const [activeTypeFilter, setActiveTypeFilter] = useState('all'); // 'all' | 'Hospital' | 'Clinic' | 'Diagnostic'
-  const [loading, setLoading] = useState(true);
-  const [selectedFacility, setSelectedFacility] = useState(null);
-
-  // Review Modal State
-  const [reviewModalOrg, setReviewModalOrg] = useState(null);
-  const [newRating, setNewRating] = useState(5);
-  const [newComment, setNewComment] = useState('');
-  const [submittingReview, setSubmittingReview] = useState(false);
-  const [reviewSuccess, setReviewSuccess] = useState('');
-
-  // Reverse Geocoding helper
-  const reverseGeocode = async (lat, lng) => {
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, {
-        headers: { 'Accept-Language': 'en' }
-      });
-      const data = await res.json();
-      if (data && data.address) {
-        const city = data.address.city || data.address.town || data.address.suburb || data.address.county || data.address.state || 'Detected Location';
-        const country = data.address.country || '';
-        return `${city}${country ? `, ${country}` : ''}`;
-      }
-    } catch (e) {
-      console.warn('Reverse geocoding error:', e);
-    }
-    return null;
-  };
-
-  const fetchIpLocation = async () => {
-    try {
-      const res = await fetch('https://ipapi.co/json/').then(r => r.json()).catch(() => null);
-      if (res && res.latitude && res.longitude) {
-        const lat = parseFloat(res.latitude);
-        const lng = parseFloat(res.longitude);
-        setPatientCoords([lat, lng]);
-        setLocationName(`${res.city || 'Islamabad'}, ${res.country_name || 'Pakistan'}`);
-        setLocationStatus('ip');
-        loadNearbyFacilities(lat, lng);
-        return;
-      }
-    } catch (e) {
-      console.warn('IP location lookup failed:', e);
-    }
-
-    const fallbackLat = 33.6844;
-    const fallbackLng = 73.0479;
-    setPatientCoords([fallbackLat, fallbackLng]);
-    setLocationName('Islamabad, Pakistan');
-    setLocationStatus('denied');
-    loadNearbyFacilities(fallbackLat, fallbackLng);
-  };
-
-  const getUserLocation = async () => {
-    setLocationStatus('requesting');
-
-    // 1. If running on native mobile device (Capacitor Android/iOS)
-    if (Capacitor.isNativePlatform()) {
-      try {
-        const permResult = await Geolocation.requestPermissions();
-        if (permResult.location === 'granted' || permResult.coarseLocation === 'granted') {
-          const pos = await Geolocation.getCurrentPosition({
-            enableHighAccuracy: true,
-            timeout: 10000
-          });
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          setPatientCoords([lat, lng]);
-          setLocationStatus('success');
-          loadNearbyFacilities(lat, lng);
-          const name = await reverseGeocode(lat, lng);
-          if (name) setLocationName(name);
-          return;
-        }
-      } catch (nativeErr) {
-        console.warn('Native Capacitor Geolocation failed, trying web fallback:', nativeErr);
-      }
-    }
-
-    // 2. Web browser fallback (HTML5 Geolocation)
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          setPatientCoords([lat, lng]);
-          setLocationStatus('success');
-          loadNearbyFacilities(lat, lng);
-          const name = await reverseGeocode(lat, lng);
-          if (name) setLocationName(name);
-        },
-        (err) => {
-          console.warn('Browser GPS error/denied:', err.message);
-          fetchIpLocation();
-        },
-        { enableHighAccuracy: true, timeout: 8000 }
-      );
-    } else {
-      fetchIpLocation();
-    }
-  };
-
-  const handleCitySearch = async (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    if (!citySearchInput.trim() || isSearchingCity) return;
-    setIsSearchingCity(true);
+    if (rating < 1) { setError('Please choose a star rating.'); return; }
+    if (!comment.trim()) { setError('Please write a short comment.'); return; }
+    setBusy(true);
+    setError('');
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(citySearchInput.trim())}`, {
-        headers: { 'Accept-Language': 'en' }
-      });
-      const data = await res.json();
-      if (data && data.length > 0) {
-        const first = data[0];
-        const lat = parseFloat(first.lat);
-        const lng = parseFloat(first.lon);
-        setPatientCoords([lat, lng]);
-        setLocationName(first.display_name.split(',').slice(0, 2).join(','));
-        setLocationStatus('success');
-        loadNearbyFacilities(lat, lng);
-        setCitySearchInput('');
-      } else {
-        alert(`Location "${citySearchInput}" not found. Please try searching a major city like Islamabad, Lahore, or Karachi.`);
-      }
+      const res = await addOrganizationReview(org.id, rating, comment.trim());
+      onUpdated(res.data);
+      setDone(true);
+      setComment('');
     } catch (err) {
-      console.error('City search failed:', err);
+      setError(err.message);
     } finally {
-      setIsSearchingCity(false);
+      setBusy(false);
     }
   };
-
-  const handleSelectPresetCity = (preset) => {
-    setPatientCoords([preset.lat, preset.lng]);
-    setLocationName(`${preset.name}, Pakistan`);
-    setLocationStatus('success');
-    loadNearbyFacilities(preset.lat, preset.lng);
-  };
-
-  useEffect(() => {
-    getUserLocation();
-  }, []);
-
-  const loadNearbyFacilities = async (lat, lng) => {
-    setLoading(true);
-    let formatted = [];
-
-    try {
-      const data = await api.fetchNearbyOrganizations(lat, lng, 15);
-      const list = data?.data || data?.organizations || [];
-      if (Array.isArray(list) && list.length > 0) {
-        formatted = list.map((fac, idx) => {
-          const coords = fac.location?.coordinates
-            ? [fac.location.coordinates[1], fac.location.coordinates[0]]
-            : [lat + (idx % 2 === 0 ? 0.006 * (idx + 1) : -0.005 * (idx + 1)), lng + (idx % 3 === 0 ? 0.007 * (idx + 1) : -0.004 * (idx + 1))];
-
-          const isPartner = fac.isPartner !== undefined ? fac.isPartner : (fac.source === 'mediguide_partner');
-          const source = fac.source || (isPartner ? 'mediguide_partner' : 'google_maps');
-
-          return {
-            ...fac,
-            id: fac._id || fac.id || `fac_${idx}`,
-            coords,
-            distanceKm: fac.distanceKm || (0.7 + idx * 0.4).toFixed(1),
-            source,
-            isPartner
-          };
-        });
-      }
-    } catch (err) {
-      console.warn('Network call failed, relying on local facilities dataset:', err.message);
-    }
-
-    // Always guarantee facilities exist on the map centered around user coords
-    if (formatted.length === 0) {
-      formatted = [
-        {
-          id: 'fac_loc_1',
-          name: 'Shifa International Hospital & Emergency',
-          type: 'Hospital',
-          source: 'mediguide_partner',
-          isPartner: true,
-          allowAppBooking: true,
-          address: 'Sector H-8/4, Islamabad',
-          phone: '+92 51-8463000',
-          rating: 4.9,
-          averageRating: 4.9,
-          totalReviews: 24,
-          distanceKm: '0.6',
-          coords: [lat + 0.003, lng + 0.004],
-          reviews: [
-            { patientName: 'Ahmad Hassan', rating: 5, comment: 'Outstanding emergency care! The cardiologist was attentive and app booking saved us hours.', visitDate: '2026-08-15' }
-          ]
-        },
-        {
-          id: 'fac_loc_2',
-          name: 'Maroof International Hospital & Dermatology Center',
-          type: 'Clinic',
-          source: 'mediguide_partner',
-          isPartner: true,
-          allowAppBooking: true,
-          address: 'F-10 Markaz, Islamabad',
-          phone: '+92 51-2222920',
-          rating: 4.7,
-          averageRating: 4.7,
-          totalReviews: 18,
-          distanceKm: '0.8',
-          coords: [lat + 0.006, lng - 0.005],
-          reviews: [
-            { patientName: 'Usman Ali', rating: 5, comment: 'Short wait time, friendly receptionist, thorough dermatology screening.', visitDate: '2026-08-28' }
-          ]
-        },
-        {
-          id: 'fac_loc_3',
-          name: 'Kulsum International Specialist Clinic',
-          type: 'Hospital',
-          source: 'mediguide_partner',
-          isPartner: true,
-          allowAppBooking: true,
-          address: 'Blue Area, Islamabad',
-          phone: '+92 51-2276711',
-          rating: 4.8,
-          averageRating: 4.8,
-          totalReviews: 15,
-          distanceKm: '0.9',
-          coords: [lat - 0.004, lng + 0.006],
-          reviews: [
-            { patientName: 'Zainab Bibi', rating: 5, comment: 'Top-tier cardiology specialists. The AI triage directed me here.', visitDate: '2026-08-05' }
-          ]
-        },
-        {
-          id: 'fac_loc_4',
-          name: 'Metropolitan MRI & Diagnostic Center',
-          type: 'Diagnostic Center',
-          source: 'mediguide_partner',
-          isPartner: true,
-          allowAppBooking: true,
-          address: 'G-8 Markaz, Islamabad',
-          phone: '+92 51-4433221',
-          rating: 4.6,
-          averageRating: 4.6,
-          totalReviews: 9,
-          distanceKm: '1.1',
-          coords: [lat - 0.005, lng - 0.004]
-        },
-        {
-          id: 'fac_loc_5',
-          name: 'PIMS (Pakistan Institute of Medical Sciences)',
-          type: 'Public Hospital',
-          source: 'google_maps',
-          isPartner: false,
-          allowAppBooking: false,
-          address: 'G-8/3, Islamabad',
-          phone: '+92 51-9261170',
-          googleRating: 4.5,
-          googleReviewsCount: 320,
-          distanceKm: '1.4',
-          coords: [lat + 0.007, lng + 0.006],
-          publicReviewSnippet: '"Major public tertiary care center with 24/7 emergency unit."'
-        },
-        {
-          id: 'fac_loc_6',
-          name: 'Federal Government Polyclinic Hospital',
-          type: 'Public Hospital',
-          source: 'google_maps',
-          isPartner: false,
-          allowAppBooking: false,
-          address: 'G-6/1, Luqman Hakeem Road, Islamabad',
-          phone: '+92 51-9218300',
-          googleRating: 4.4,
-          googleReviewsCount: 210,
-          distanceKm: '1.7',
-          coords: [lat - 0.006, lng - 0.007],
-          publicReviewSnippet: '"High volume government public medical facility."'
-        },
-        {
-          id: 'fac_loc_7',
-          name: 'Ali Medical Centre & Urgent Care',
-          type: 'Public Clinic',
-          source: 'google_maps',
-          isPartner: false,
-          allowAppBooking: false,
-          address: 'Kohistan Road, F-8 Markaz, Islamabad',
-          phone: '+92 51-8082000',
-          googleRating: 4.7,
-          googleReviewsCount: 185,
-          distanceKm: '2.1',
-          coords: [lat + 0.010, lng - 0.003],
-          publicReviewSnippet: '"Clean urgent care facility in F-8. High Google rating."'
-        }
-      ];
-    }
-
-    setFacilities(formatted);
-    setLoading(false);
-  };
-
-  const handlePostReview = async (e) => {
-    e.preventDefault();
-    if (!reviewModalOrg || !newComment.trim() || submittingReview) return;
-    setSubmittingReview(true);
-    setReviewSuccess('');
-
-    try {
-      const orgId = reviewModalOrg._id || reviewModalOrg.id;
-      const res = await fetch(`${API_BASE_URL}/organizations/${orgId}/reviews`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rating: newRating, comment: newComment, patientName: 'Verified App Patient' })
-      });
-
-      const resData = await res.json();
-      if (resData.success) {
-        setReviewSuccess('✓ Your review has been posted successfully!');
-        setNewComment('');
-        loadNearbyFacilities(patientCoords[0], patientCoords[1]);
-      }
-    } catch (err) {
-      console.error('Failed to post review:', err);
-    } finally {
-      setSubmittingReview(false);
-    }
-  };
-
-  const filteredFacilities = facilities.filter((fac) => {
-    // 1. Source Filter
-    if (activeSourceFilter === 'partner') {
-      if (fac.source !== 'mediguide_partner' && !fac.isPartner) return false;
-    } else if (activeSourceFilter === 'google') {
-      if (fac.source !== 'google_maps' && fac.isPartner !== false) return false;
-    }
-
-    // 2. Type Filter
-    if (activeTypeFilter !== 'all') {
-      const facType = (fac.type || '').toLowerCase();
-      const target = activeTypeFilter.toLowerCase();
-      if (!facType.includes(target)) return false;
-    }
-
-    return true;
-  });
-
-  const partnerCount = facilities.filter(f => f.source === 'mediguide_partner' || f.isPartner === true).length;
-  const googleCount = facilities.filter(f => f.source === 'google_maps' || f.isPartner === false).length;
 
   return (
-    <div className={styles.mapContainerCard}>
-      {/* ── Top Header & Location Status Bar ── */}
-      <div className={styles.mapHeader}>
-        <div className={styles.mapTitleBox}>
-          <img src="/logo.jpg" alt="MediGuide" className={styles.mapLogoImg} />
-          <div>
-            <h4 className={styles.mapHeading}>Healthcare Facilities Map</h4>
-            <p className={styles.locationBadgeText}>
-              📍 <strong>Location:</strong> {locationName}
-            </p>
+    <div className={styles.reviewsBox}>
+      {org.reviews.length === 0 ? (
+        <p className={styles.muted}>No reviews yet. Be the first to share your experience.</p>
+      ) : (
+        <ul className={styles.reviewList}>
+          {org.reviews.map((r, i) => (
+            <li key={`${r.patientName}-${r.visitDate}-${i}`} className={styles.reviewItem}>
+              <div className={styles.reviewHead}>
+                <strong>{r.patientName || 'Patient'}</strong>
+                <Stars value={r.rating} size={13} />
+              </div>
+              <p>{r.comment}</p>
+              {r.visitDate && <span className={styles.muted}>{r.visitDate}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {done ? (
+        <p className={styles.successMsg} role="status">Thanks! Your review was posted.</p>
+      ) : (
+        <form onSubmit={submit} className={styles.reviewForm}>
+          <span className={styles.formLabel}>Rate your visit</span>
+          <div className={styles.starPicker} role="radiogroup" aria-label="Star rating">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={rating === n}
+                aria-label={`${n} star${n > 1 ? 's' : ''}`}
+                className={`${styles.starBtn} ${n <= rating ? styles.starOn : styles.starOff}`}
+                onClick={() => setRating(n)}
+              >★</button>
+            ))}
           </div>
-        </div>
-
-        <button
-          type="button"
-          className={styles.btnLocateMe}
-          onClick={getUserLocation}
-          title="Recenter on live GPS"
-        >
-          🎯 Live GPS
-        </button>
-      </div>
-
-      {/* ── Location Search Input & City Preset Chips ── */}
-      <div className={styles.locationSearchSection}>
-        <form onSubmit={handleCitySearch} className={styles.searchForm}>
-          <svg className={styles.searchIconSvg} fill="none" stroke="#64748B" strokeWidth="2.2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-          </svg>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder="Search city, sector or address (e.g. Islamabad, F-7)..."
-            value={citySearchInput}
-            onChange={(e) => setCitySearchInput(e.target.value)}
+          <textarea
+            className={styles.textarea}
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="Share a few words about your experience"
+            rows={3}
+            maxLength={500}
           />
-          <button type="submit" className={styles.btnSearchSubmit} disabled={isSearchingCity}>
-            {isSearchingCity ? 'Searching...' : 'Go'}
+          {error && <p className={styles.errorMsg} role="alert">{error}</p>}
+          <button type="submit" className={styles.btnPrimary} disabled={busy}>
+            {busy ? 'Posting…' : 'Post review'}
           </button>
         </form>
-
-        <div className={styles.presetChipsRow}>
-          <span className={styles.presetLabel}>Quick Cities:</span>
-          {CITY_PRESETS.map((preset) => (
-            <button
-              key={preset.name}
-              type="button"
-              className={styles.presetChip}
-              onClick={() => handleSelectPresetCity(preset)}
-            >
-              📍 {preset.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Spacious Map Canvas (No Squeezing) ── */}
-      <div className={styles.mapWrapper}>
-        <MapContainer center={patientCoords} zoom={13} scrollWheelZoom={false} className={styles.leafletMap}>
-          <ChangeView center={patientCoords} />
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-
-          {/* Patient Location Pin */}
-          <Marker position={patientCoords} icon={createCustomIcon('patient', 'You', 'patient')}>
-            <Popup>
-              <div className={styles.popupCard}>
-                <strong>📍 Your Location</strong>
-                <p>{locationName}</p>
-              </div>
-            </Popup>
-          </Marker>
-
-          {/* Facility Pins */}
-          {filteredFacilities.map((fac) => (
-            <Marker
-              key={fac.id}
-              position={fac.coords}
-              icon={createCustomIcon(fac.type || 'Hospital', fac.name, fac.source)}
-              eventHandlers={{ click: () => setSelectedFacility(fac) }}
-            >
-              <Popup>
-                <div className={styles.popupCard}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                    <span className={fac.source === 'mediguide_partner' ? styles.badgePartnerMini : styles.badgeGoogleMini}>
-                      {fac.source === 'mediguide_partner' ? '🟢 MediGuide Partner' : '🔵 Google Maps'}
-                    </span>
-                  </div>
-                  <h5>{fac.name}</h5>
-                  <p className={styles.popupType}>{fac.type} • ⭐ {fac.averageRating || fac.googleRating || fac.rating || '4.6'}</p>
-                  <p className={styles.popupAddress}>📍 {fac.address}</p>
-
-                  {fac.source === 'mediguide_partner' ? (
-                    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <button
-                        type="button"
-                        className={styles.popupBookBtn}
-                        onClick={() => onSelectBooking && onSelectBooking(fac)}
-                      >
-                        📅 Book Doctor Session
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.popupReviewBtn}
-                        onClick={() => setReviewModalOrg(fac)}
-                      >
-                        ⭐ App Reviews ({fac.reviews?.length || fac.totalReviews || 0})
-                      </button>
-                    </div>
-                  ) : (
-                    <div style={{ marginTop: '6px' }}>
-                      <p className={styles.googleSnippet}>{fac.publicReviewSnippet || `⭐ ${fac.googleRating} (${fac.googleReviewsCount} Google Reviews)`}</p>
-                      {fac.phone && <a href={`tel:${fac.phone}`} className={styles.popupCallBtn}>📞 Call {fac.phone}</a>}
-                    </div>
-                  )}
-                </div>
-              </Popup>
-            </Marker>
-          ))}
-        </MapContainer>
-      </div>
-
-      {/* ── PROMINENT FILTER SECTION POSITIONED DIRECTLY UNDER THE MAP ── */}
-      <div className={styles.filterSectionUnderMap}>
-        <div className={styles.filterSectionHeader}>
-          <h5 className={styles.filterSectionTitle}>🔍 Filter Facilities & Map Pin Sources</h5>
-          <span className={styles.filterCountBadge}>{filteredFacilities.length} Shown</span>
-        </div>
-
-        {/* Source Provider Tabs: All | MediGuide Partners | Google Maps */}
-        <div className={styles.sourceTabsContainer}>
-          <button
-            type="button"
-            className={`${styles.sourceTabBtn} ${activeSourceFilter === 'all' ? styles.activeSourceTabBtn : ''}`}
-            onClick={() => setActiveSourceFilter('all')}
-          >
-            ✨ All ({facilities.length})
-          </button>
-          <button
-            type="button"
-            className={`${styles.sourceTabBtn} ${styles.tabBtnPartner} ${activeSourceFilter === 'partner' ? styles.activeSourceTabBtn : ''}`}
-            onClick={() => setActiveSourceFilter('partner')}
-          >
-            🟢 MediGuide Partners ({partnerCount})
-          </button>
-          <button
-            type="button"
-            className={`${styles.sourceTabBtn} ${styles.tabBtnGoogle} ${activeSourceFilter === 'google' ? styles.activeSourceTabBtn : ''}`}
-            onClick={() => setActiveSourceFilter('google')}
-          >
-            🔵 Google Maps ({googleCount})
-          </button>
-        </div>
-
-        {/* Facility Category Type Chips */}
-        <div className={styles.typeChipsRow}>
-          <span className={styles.typeLabel}>Type:</span>
-          {[
-            { key: 'all', label: 'All Types' },
-            { key: 'hospital', label: '🏥 Hospitals' },
-            { key: 'clinic', label: '🩺 Clinics' },
-            { key: 'diagnostic', label: '💊 Labs & Diagnostic' }
-          ].map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              className={`${styles.typeChip} ${activeTypeFilter === t.key ? styles.activeTypeChip : ''}`}
-              onClick={() => setActiveTypeFilter(t.key)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Source Type Explanatory Note */}
-        <div className={styles.sourceExplanationNote}>
-          <div className={styles.noteItem}>
-            <span>🟢 <strong>MediGuide Partners:</strong> Registered clinics with in-app doctor appointment booking.</span>
-          </div>
-          <div className={styles.noteItem}>
-            <span>🔵 <strong>Google Maps Facilities:</strong> Nearby public hospitals, trauma centers & verified call contacts.</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Facilities Cards Scroll List ── */}
-      <div className={styles.facilityListContainer}>
-        <div className={styles.facilityCardsScroll}>
-          {filteredFacilities.map((fac) => (
-            <div
-              key={fac.id}
-              className={`${styles.facilityCard} ${fac.source === 'mediguide_partner' ? styles.cardPartnerBorder : styles.cardGoogleBorder} ${selectedFacility?.id === fac.id ? styles.selectedCard : ''}`}
-              onClick={() => {
-                setSelectedFacility(fac);
-                setPatientCoords(fac.coords);
-              }}
-            >
-              <div className={styles.badgeSourceHeader}>
-                <span className={fac.source === 'mediguide_partner' ? styles.tagPartner : styles.tagGoogle}>
-                  {fac.source === 'mediguide_partner' ? '🟢 MediGuide Partner' : '🔵 Google Maps'}
-                </span>
-                <span className={styles.distTag}>{fac.distanceKm} km</span>
-              </div>
-
-              <div className={styles.facilityCardTop}>
-                <strong>{fac.name}</strong>
-              </div>
-
-              <p className={styles.facAddress}>📍 {fac.address}</p>
-
-              <div className={styles.facCardFooter}>
-                <span className={styles.facType}>{fac.type}</span>
-                <span className={styles.facRating}>⭐ {fac.averageRating || fac.googleRating || fac.rating || '4.6'}</span>
-              </div>
-
-              {fac.source === 'mediguide_partner' && fac.reviews && fac.reviews.length > 0 && (
-                <div className={styles.cardReviewSnippet}>
-                  💬 &quot;{fac.reviews[0].comment.length > 55 ? fac.reviews[0].comment.substring(0, 55) + '...' : fac.reviews[0].comment}&quot;
-                </div>
-              )}
-
-              {fac.source === 'mediguide_partner' ? (
-                <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
-                  <button
-                    type="button"
-                    className={styles.btnBookMini}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectBooking && onSelectBooking(fac);
-                    }}
-                  >
-                    📅 Book Session
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.btnReviewMini}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setReviewModalOrg(fac);
-                    }}
-                  >
-                    ⭐ {fac.reviews?.length || fac.totalReviews || 0}
-                  </button>
-                </div>
-              ) : (
-                <div style={{ marginTop: '6px' }}>
-                  {fac.phone && (
-                    <a href={`tel:${fac.phone}`} className={styles.btnCallMini}>📞 Call Hospital</a>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Review Modal */}
-      {reviewModalOrg && (
-        <div className={styles.modalOverlay} onClick={() => setReviewModalOrg(null)}>
-          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <div>
-                <span className={styles.badgePartnerMini}>🟢 Registered Partner</span>
-                <h4>⭐ {reviewModalOrg.name} - Patient Reviews</h4>
-              </div>
-              <button type="button" className={styles.btnCloseModal} onClick={() => setReviewModalOrg(null)}>✕</button>
-            </div>
-
-            {reviewSuccess && <div className={styles.successAlert}>{reviewSuccess}</div>}
-
-            <div className={styles.reviewsListSection}>
-              <h5>Verified App Patient Reviews ({reviewModalOrg.reviews?.length || 0})</h5>
-              {(!reviewModalOrg.reviews || reviewModalOrg.reviews.length === 0) ? (
-                <p className={styles.noReviews}>No patient reviews written yet. Be the first to leave a review!</p>
-              ) : (
-                <div className={styles.reviewsScroll}>
-                  {reviewModalOrg.reviews.map((rev, i) => (
-                    <div key={i} className={styles.reviewItemCard}>
-                      <div className={styles.reviewItemTop}>
-                        <strong>👤 {rev.patientName || 'Verified Patient'}</strong>
-                        <span className={styles.reviewStars}>{'⭐'.repeat(rev.rating)}</span>
-                      </div>
-                      <p className={styles.reviewComment}>&quot;{rev.comment}&quot;</p>
-                      <span className={styles.reviewDate}>Visited: {rev.visitDate || 'Recently'}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <form onSubmit={handlePostReview} className={styles.reviewForm}>
-              <h5>✍️ Write a Patient Review</h5>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <label style={{ fontSize: '0.8125rem', fontWeight: '700' }}>Your Rating:</label>
-                <select
-                  value={newRating}
-                  onChange={(e) => setNewRating(Number(e.target.value))}
-                  className={styles.ratingSelect}
-                >
-                  <option value={5}>⭐⭐⭐⭐⭐ (5/5 Excellent)</option>
-                  <option value={4}>⭐⭐⭐⭐ (4/5 Very Good)</option>
-                  <option value={3}>⭐⭐⭐ (3/5 Average)</option>
-                  <option value={2}>⭐⭐ (2/5 Needs Improvement)</option>
-                  <option value={1}>⭐ (1/5 Poor)</option>
-                </select>
-              </div>
-
-              <textarea
-                rows={2}
-                placeholder="Write about your experience with doctors and facilities..."
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                className={styles.reviewTextarea}
-                required
-              />
-
-              <button type="submit" className={styles.btnSubmitReview} disabled={submittingReview}>
-                {submittingReview ? 'Posting Review...' : 'Post Patient Review'}
-              </button>
-            </form>
-          </div>
-        </div>
       )}
     </div>
   );
 }
+
+const FacilityCard = memo(function FacilityCard({ org, selected, onSelect, onBook, onUpdated, canReview }) {
+  const [showReviews, setShowReviews] = useState(false);
+  const ref = useRef(null);
+  const directions = mapsDirectionsUrl(org);
+
+  useEffect(() => {
+    if (selected && ref.current) ref.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selected]);
+
+  const rating = org.isPartner
+    ? (org.totalReviews > 0 ? { value: org.averageRating, count: org.totalReviews, label: 'reviews' } : null)
+    : (org.publicRating > 0 ? { value: org.publicRating, count: org.publicReviewsCount, label: 'public ratings' } : null);
+
+  return (
+    <article
+      ref={ref}
+      className={`${styles.card} ${selected ? styles.cardSelected : ''}`}
+      aria-current={selected ? 'true' : undefined}
+    >
+      <div
+        role="button"
+        tabIndex={0}
+        className={styles.cardMain}
+        onClick={() => onSelect(org.id)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(org.id); } }}
+      >
+        <div className={styles.cardTop}>
+          <h4 className={styles.cardName}>{org.name}</h4>
+          {typeof org.distanceKm === 'number' && <span className={styles.distance}>{formatDistance(org.distanceKm)}</span>}
+        </div>
+        <div className={styles.metaRow}>
+          <span className={org.isPartner ? styles.badgePartner : styles.badgePublic}>
+            {org.isPartner ? 'MediGuide partner' : 'Public facility'}
+          </span>
+          {org.type && <span className={styles.typeTag}>{org.type}</span>}
+          {rating ? (
+            <span className={styles.rating}>
+              <Stars value={rating.value} size={13} /> {Number(rating.value).toFixed(1)}
+              {rating.count > 0 && <span className={styles.muted}> ({rating.count} {rating.label})</span>}
+            </span>
+          ) : (
+            org.isPartner && <span className={styles.muted}>No reviews yet</span>
+          )}
+        </div>
+        {org.address && <p className={styles.address}>{org.address}</p>}
+        {org.services?.length > 0 && (
+          <div className={styles.services}>
+            {org.services.slice(0, 4).map((s) => <span key={s} className={styles.serviceChip}>{s}</span>)}
+            {org.services.length > 4 && <span className={styles.serviceChip}>+{org.services.length - 4}</span>}
+          </div>
+        )}
+      </div>
+
+      <div className={styles.actions}>
+        {org.phone && <a href={telHref(org.phone)} className={styles.btnOutline}>Call</a>}
+        {directions && <a href={directions} target="_blank" rel="noopener noreferrer" className={styles.btnOutline}>Directions</a>}
+        {org.isPartner && org.allowAppBooking && (
+          <button type="button" className={styles.btnPrimary} onClick={() => onBook?.(org)}>Book</button>
+        )}
+        {org.isPartner && (
+          <button
+            type="button"
+            className={styles.btnGhost}
+            aria-expanded={showReviews}
+            onClick={() => setShowReviews((v) => !v)}
+          >
+            {showReviews ? 'Hide reviews' : 'Reviews'}
+          </button>
+        )}
+      </div>
+
+      {org.isPartner && showReviews && (
+        canReview
+          ? <ReviewSection org={org} onUpdated={onUpdated} />
+          : <p className={styles.muted}>Sign in as a patient to read and post reviews.</p>
+      )}
+    </article>
+  );
+});
+
+function Skeleton() {
+  return (
+    <div className={styles.skeletonWrap} aria-busy="true" aria-label="Loading nearby facilities">
+      <div className={`skeleton-box ${styles.skMap}`} />
+      {[0, 1, 2].map((i) => <div key={i} className={`skeleton-box ${styles.skCard}`} />)}
+    </div>
+  );
+}
+
+function HospitalMap({ onSelectBooking }) {
+  const { user } = useAuth();
+  const [loc, setLoc] = useState({ ...DEFAULT_LOCATION, isDefault: true });
+  const [locating, setLocating] = useState(true);
+  const [locNonce, setLocNonce] = useState(0);
+  const [fetchNonce, setFetchNonce] = useState(0);
+  const [orgs, setOrgs] = useState([]);
+  const [status, setStatus] = useState('loading'); // loading | ready | error
+  const [error, setError] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [selectedId, setSelectedId] = useState(null);
+  const [visible, setVisible] = useState(PAGE_SIZE);
+
+  // Device location (never blocks the first fetch)
+  useEffect(() => {
+    let cancelled = false;
+    getPosition()
+      .then((p) => { if (!cancelled) { setLoc({ ...p, isDefault: false }); setLocating(false); } })
+      .catch(() => { if (!cancelled) { setLoc({ ...DEFAULT_LOCATION, isDefault: true }); setLocating(false); } });
+    return () => { cancelled = true; };
+  }, [locNonce]);
+
+  // Facilities near the current origin; stale responses are ignored
+  useEffect(() => {
+    let cancelled = false;
+    fetchNearbyOrganizations(loc.lat, loc.lng, 20)
+      .then((res) => {
+        if (cancelled) return;
+        setOrgs(res.data || []);
+        setStatus('ready');
+        setError('');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err.message);
+        setStatus('error');
+      });
+    return () => { cancelled = true; };
+  }, [loc.lat, loc.lng, fetchNonce]);
+
+  const retryLocation = () => { setLocating(true); setLocNonce((n) => n + 1); };
+  const retryFetch = () => { setStatus('loading'); setFetchNonce((n) => n + 1); };
+
+  const changeFilter = (key) => { setFilter(key); setVisible(PAGE_SIZE); setSelectedId(null); };
+
+  const filtered = useMemo(
+    () => orgs.filter((o) => filter === 'all' || (filter === 'partner' ? o.isPartner : !o.isPartner)),
+    [orgs, filter]
+  );
+
+  const points = useMemo(() => {
+    const pts = filtered.map(coordsOf).filter(Boolean);
+    const nearest = filtered[0]?.distanceKm;
+    // Only include the user in the framing when they are reasonably close
+    if (!loc.isDefault && typeof nearest === 'number' && nearest < 60) pts.push([loc.lat, loc.lng]);
+    return pts;
+  }, [filtered, loc]);
+
+  const focus = useMemo(() => {
+    const org = filtered.find((o) => o.id === selectedId);
+    return org ? coordsOf(org) : null;
+  }, [filtered, selectedId]);
+
+  const handleSelect = useCallback((id) => setSelectedId(id), []);
+  const handleUpdated = useCallback((updated) => {
+    setOrgs((prev) => prev.map((o) => (o.id === updated.id ? { ...updated, distanceKm: o.distanceKm } : o)));
+  }, []);
+
+  const markers = useMemo(
+    () => filtered.map((org) => {
+      const pos = coordsOf(org);
+      if (!pos) return null;
+      const active = org.id === selectedId;
+      const icon = org.isPartner ? (active ? ICONS.partnerActive : ICONS.partner) : (active ? ICONS.publicActive : ICONS.public);
+      return (
+        <Marker
+          key={org.id}
+          position={pos}
+          icon={icon}
+          title={org.name}
+          zIndexOffset={active ? 1000 : 0}
+          eventHandlers={{ click: () => setSelectedId(org.id) }}
+        />
+      );
+    }),
+    [filtered, selectedId]
+  );
+
+  const canReview = user?.role === 'user';
+
+  if (status === 'loading') return <Skeleton />;
+
+  return (
+    <section className={styles.wrapper} aria-label="Nearby healthcare facilities">
+      <header className={styles.header}>
+        <h3 className={styles.title}>Nearby facilities</h3>
+        <span className={styles.count}>{filtered.length} shown</span>
+      </header>
+
+      {locating && <div className={styles.infoBanner} role="status">Finding your location…</div>}
+      {!locating && loc.isDefault && (
+        <div className={styles.warnBanner} role="status">
+          <span>Using a default location — enable location for accurate distances</span>
+          <button type="button" className={styles.bannerBtn} onClick={retryLocation}>Retry</button>
+        </div>
+      )}
+
+      <div className={styles.filters} role="group" aria-label="Filter facilities">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            className={`${styles.pill} ${filter === f.key ? styles.pillActive : ''}`}
+            aria-pressed={filter === f.key}
+            onClick={() => changeFilter(f.key)}
+          >{f.label}</button>
+        ))}
+      </div>
+
+      {status === 'error' ? (
+        <div className={styles.stateBox} role="alert">
+          <p>{error || 'Could not load nearby facilities.'}</p>
+          <button type="button" className={styles.btnPrimary} onClick={retryFetch}>Try again</button>
+        </div>
+      ) : (
+        <>
+          <div className={styles.mapBox}>
+            <MapContainer center={[loc.lat, loc.lng]} zoom={12} scrollWheelZoom={false} className={styles.map}>
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              <MapController points={points} focus={focus} />
+              {!loc.isDefault && <Marker position={[loc.lat, loc.lng]} icon={ICONS.user} title="You are here" interactive={false} />}
+              {markers}
+            </MapContainer>
+            <div className={styles.legend}>
+              <span><i className={styles.dotPartner} /> MediGuide partner</span>
+              <span><i className={styles.dotPublic} /> Public facility</span>
+            </div>
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className={styles.stateBox}>
+              <p>No facilities match this filter.</p>
+              <button type="button" className={styles.btnOutline} onClick={() => changeFilter('all')}>Show all</button>
+            </div>
+          ) : (
+            <div className={styles.list}>
+              {filtered.slice(0, visible).map((org) => (
+                <FacilityCard
+                  key={org.id}
+                  org={org}
+                  selected={org.id === selectedId}
+                  onSelect={handleSelect}
+                  onBook={onSelectBooking}
+                  onUpdated={handleUpdated}
+                  canReview={canReview}
+                />
+              ))}
+              {filtered.length > visible && (
+                <button type="button" className={styles.btnOutline} onClick={() => setVisible((v) => v + PAGE_SIZE)}>
+                  Show more ({filtered.length - visible})
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+export default HospitalMap;

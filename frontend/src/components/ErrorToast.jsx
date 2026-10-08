@@ -1,18 +1,21 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import styles from './ErrorToast.module.css';
 
 function ErrorToast({ message, onClose, duration = 5000 }) {
+  // Keep the latest onClose without restarting the timer on every parent render
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
+
   useEffect(() => {
-    if (duration > 0) {
-      const timer = setTimeout(onClose, duration);
-      return () => clearTimeout(timer);
-    }
-  }, [duration, onClose]);
+    if (!message || duration <= 0) return undefined;
+    const timer = setTimeout(() => closeRef.current?.(), duration);
+    return () => clearTimeout(timer);
+  }, [message, duration]);
 
   if (!message) return null;
 
   return (
-    <div className={styles.wrapper}>
+    <div className={styles.wrapper} role="alert">
       <div className={styles.toast}>
         <svg
           className={styles.icon}
@@ -28,7 +31,7 @@ function ErrorToast({ message, onClose, duration = 5000 }) {
           />
         </svg>
         <p className={styles.message}>{message}</p>
-        <button onClick={onClose} className={styles.closeBtn}>
+        <button type="button" onClick={onClose} className={styles.closeBtn} aria-label="Dismiss">
           <svg className={styles.closeSvg} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
           </svg>

@@ -1,396 +1,265 @@
-import { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { usePatient } from './PatientContext';
-import * as api from '../../services/api';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { getAvailableSlots, bookSlot } from '../../services/api';
+import { slotToDate, formatSlotDate, formatSlotTime, formatSlotLong } from './slotTime';
 import styles from './AvailableSlots.module.css';
 
-const SPECIALTY_MAP = {
-  'Dermatologist': 'dermatology',
-  'General Physician': 'general',
-  'Gastroenterologist': 'gastroenterology',
-  'Orthopedist': 'orthopedics',
-  'Cardiologist': 'cardiology',
-  'Emergency': null
-};
+const SPECIALTIES = ['Cardiologist', 'General Physician', 'Pediatrician', 'Dermatologist', 'Gastroenterologist', 'Orthopedist'];
 
-const CATEGORY_ITEMS = [
-  { key: 'all', label: 'All', icon: '🏅', bg: '#f0fdfa', color: '#0d9488' },
-  { key: 'cardiology', label: 'Cardiology', icon: '❤️', bg: '#fef2f2', color: '#ef4444' },
-  { key: 'medicine', label: 'Medicine', icon: '💊', bg: '#f0f9ff', color: '#0284c7' },
-  { key: 'general', label: 'General', icon: '🩺', bg: '#fdf2f8', color: '#ec4899' }
-];
+const initials = (name = '') =>
+  name.replace(/^Dr\.?\s*/i, '').split(/\s+/).filter(Boolean).map((n) => n[0]).join('').toUpperCase().slice(0, 2) || 'DR';
 
-const DATE_SCHEDULES = [
-  { day: '7', name: 'Sun' },
-  { day: '8', name: 'Mon' },
-  { day: '9', name: 'Tue' },
-  { day: '10', name: 'Wed' },
-  { day: '11', name: 'Thu' },
-];
+function ConfirmSheet({ slot, busy, error, onConfirm, onClose }) {
+  const confirmRef = useRef(null);
 
-const VISIT_HOURS = [
-  '11:00AM', '12:00PM', '01:00PM', '02:00PM', '03:00PM', '04:00PM', '05:00PM', '06:00PM'
-];
+  useEffect(() => {
+    confirmRef.current?.focus();
+    const onKey = (e) => { if (e.key === 'Escape' && !busy) onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [busy, onClose]);
 
-function normalizeFilter(raw) {
-  if (!raw) return null;
-  if (SPECIALTY_MAP[raw] !== undefined) return SPECIALTY_MAP[raw];
-  return raw.toLowerCase();
-}
-
-function getInitials(name = '') {
-  return name.replace(/^Dr\.\s*/i, '').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'DR';
+  return (
+    <div className={styles.overlay} onClick={() => { if (!busy) onClose(); }}>
+      <div
+        className={styles.sheet}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 id="confirm-title" className={styles.sheetTitle}>Confirm your booking</h2>
+        <dl className={styles.detailList}>
+          <div><dt>Doctor</dt><dd>{slot.doctor}</dd></div>
+          <div><dt>Specialty</dt><dd>{slot.specialty}</dd></div>
+          <div><dt>Facility</dt><dd>{slot.org}</dd></div>
+          <div><dt>When</dt><dd>{formatSlotLong(slot.date, slot.time)}</dd></div>
+        </dl>
+        {error && <p className={styles.sheetError} role="alert">{error}</p>}
+        <div className={styles.sheetActions}>
+          <button type="button" className={styles.btnSecondary} onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="button" ref={confirmRef} className={styles.btnPrimary} onClick={onConfirm} disabled={busy}>
+            {busy ? 'Booking…' : 'Confirm booking'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function AvailableSlots() {
-  const { state } = useLocation();
-  const navigate = useNavigate();
-  const { user } = usePatient();
+  const { state: navState } = useLocation();
 
-  const rawFilter = state?.specialty || null;
-  const filterKey = normalizeFilter(rawFilter);
-
-  const [slots, setSlots] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  
-  // Search & Filter State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState(filterKey || 'all');
-  const [favorites, setFavorites] = useState({});
-
-  // Appointment Modal State
-  const [selectedDoctorSlot, setSelectedDoctorSlot] = useState(null);
-  const [selectedDate, setSelectedDate] = useState('9');
-  const [selectedTime, setSelectedTime] = useState('12:00PM');
-  const [confirming, setConfirming] = useState(null);
+  const initialSpecialty = SPECIALTIES.find((s) => s.toLowerCase() === String(navState?.specialty || '').toLowerCase()) || '';
+  const [specialty, setSpecialty] = useState(initialSpecialty);
+  const [search, setSearch] = useState(navState?.orgName || '');
+  const [debounced, setDebounced] = useState(navState?.orgName || '');
+  const [result, setResult] = useState({ key: null, slots: [], error: '' });
+  const [notice, setNotice] = useState('');
+  const [nonce, setNonce] = useState(0);
+  const requestKey = `${specialty}|${debounced}|${nonce}`;
+  const [pickedDate, setPickedDate] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [booking, setBooking] = useState(false);
+  const [bookError, setBookError] = useState('');
   const [booked, setBooked] = useState(null);
 
-  const fetchSlots = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const targetCategory = activeCategory === 'all' ? null : activeCategory;
-      const { slots: results } = await api.getAvailableSlots(targetCategory);
-      setSlots(results || []);
-    } catch (err) {
-      setError(err.message || 'Failed to load available doctor sessions.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
-    fetchSlots();
-  }, [activeCategory]);
+    let cancelled = false;
+    getAvailableSlots({ specialty, search: debounced })
+      .then((res) => { if (!cancelled) { const now = new Date(); setResult({ key: requestKey, slots: (res.data || []).filter((x) => slotToDate(x.date, x.time) >= now), error: '' }); } })
+      .catch((err) => { if (!cancelled) setResult({ key: requestKey, slots: [], error: err.message || 'Could not load sessions.' }); });
+    return () => { cancelled = true; };
+  }, [specialty, debounced, requestKey]);
 
-  const toggleFavorite = (e, id) => {
-    e.stopPropagation();
-    setFavorites((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
+  const { slots, error } = result;
+  const status = result.key !== requestKey ? 'loading' : error ? 'error' : 'ready';
 
-  const handleOpenBookingModal = (slot) => {
-    setSelectedDoctorSlot(slot);
-    if (slot.time) setSelectedTime(slot.time);
-  };
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
+  const chooseSpecialty = (s) => { setSpecialty(s); setNotice(''); };
+  const clearFilters = () => { setSpecialty(''); setSearch(''); setDebounced(''); };
 
-  const handleConfirmBooking = async () => {
-    if (!selectedDoctorSlot) return;
-    setConfirming(selectedDoctorSlot.id);
-    setError('');
+  const dates = useMemo(() => [...new Set(slots.map((s) => s.date))].sort(), [slots]);
+  const activeDate = dates.includes(pickedDate) ? pickedDate : dates[0] || '';
+
+  const groups = useMemo(() => {
+    const map = new Map();
+    for (const s of slots) {
+      if (s.date !== activeDate) continue;
+      const key = `${s.organizationId}|${s.doctor}`;
+      if (!map.has(key)) map.set(key, { key, doctor: s.doctor, specialty: s.specialty, org: s.org, times: [] });
+      map.get(key).times.push(s);
+    }
+    const list = [...map.values()];
+    list.forEach((g) => g.times.sort((a, b) => a.time.localeCompare(b.time)));
+    return list;
+  }, [slots, activeDate]);
+
+  const countByDate = useMemo(() => {
+    const c = {};
+    slots.forEach((s) => { c[s.date] = (c[s.date] || 0) + 1; });
+    return c;
+  }, [slots]);
+
+  const closeSheet = useCallback(() => { setSelected(null); setBookError(''); }, []);
+
+  const confirm = async () => {
+    if (!selected) return;
+    setBooking(true);
+    setBookError('');
     try {
-      const { booking } = await api.confirmBooking(selectedDoctorSlot.id);
-      setBooked({
-        ...booking,
-        org: selectedDoctorSlot.org,
-        date: `Aug ${selectedDate}, 2026`,
-        time: selectedTime
-      });
-      setSelectedDoctorSlot(null);
+      await bookSlot(selected.id);
+      setBooked(selected);
+      setSelected(null);
     } catch (err) {
-      setError(err.message || 'Could not confirm session booking.');
-      await fetchSlots();
+      if (err.status === 409) {
+        setSelected(null);
+        setNotice(err.message || 'Sorry, that session was just taken. Here are the latest options.');
+        reload();
+      } else {
+        setBookError(err.message);
+      }
     } finally {
-      setConfirming(null);
+      setBooking(false);
     }
   };
-
-  // Filter slots by search query
-  const filteredSlots = slots.filter((slot) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      slot.doctor?.toLowerCase().includes(q) ||
-      slot.specialty?.toLowerCase().includes(q) ||
-      slot.org?.toLowerCase().includes(q)
-    );
-  });
 
   if (booked) {
     return (
-      <div className={styles.bookedScreen}>
-        <div className={styles.successCircle}>
-          <svg className={styles.successSvg} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-          </svg>
+      <div className={styles.container}>
+        <div className={styles.successCard} role="status">
+          <div className={styles.successIcon} aria-hidden="true">✓</div>
+          <h1 className={styles.successTitle}>You're booked</h1>
+          <p className={styles.successText}>
+            {booked.doctor} ({booked.specialty}) at {booked.org}
+          </p>
+          <p className={styles.successWhen}>{formatSlotLong(booked.date, booked.time)}</p>
+          <div className={styles.successActions}>
+            <Link to="/patient/appointments" className={styles.btnPrimary}>View my appointments</Link>
+            <Link to="/patient/home" className={styles.btnSecondary}>Back to home</Link>
+            <button type="button" className={styles.btnLink} onClick={() => { setBooked(null); reload(); }}>Book another session</button>
+          </div>
         </div>
-        <h1 className={styles.bookedHeading}>Appointment Confirmed!</h1>
-        <p className={styles.bookedText}>
-          Your session with <span className={styles.bookedBold}>{booked.doctor}</span> is locked in.
-        </p>
-        <div className={styles.bookedCard}>
-          {[{ l: 'Doctor', v: booked.doctor }, { l: 'Specialty', v: booked.specialty }, { l: 'Clinic / Hospital', v: booked.org }, { l: 'Scheduled Date', v: booked.date }, { l: 'Visit Hour', v: booked.time }].map((r) => (
-            <div key={r.l} className={styles.bookedRow}>
-              <span className={styles.bookedLabel}>{r.l}</span>
-              <span className={styles.bookedValue} style={r.l === 'Specialty' ? { textTransform: 'capitalize' } : {}}>{r.v}</span>
-            </div>
-          ))}
-        </div>
-        <button onClick={() => navigate('/patient/home')} className={styles.backBtn}>Back to Dashboard</button>
       </div>
     );
   }
 
   return (
     <div className={styles.container}>
-      {/* ── Teal Gradient Hero Header Panel ── */}
-      <div className={styles.heroPanel}>
-        <div className={styles.heroHeaderRow}>
-          <div className={styles.menuIconCircle} onClick={() => navigate('/patient/home')}>
-            <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-            </svg>
-          </div>
-          <div className={styles.userAvatarCircle} onClick={() => navigate('/patient/profile')}>
-            <span>{(user?.name || 'User').charAt(0).toUpperCase()}</span>
-          </div>
+      <header className={styles.header}>
+        <div>
+          <h1 className={styles.title}>Doctor Sessions</h1>
+          <p className={styles.subtitle}>Open sessions from partner hospitals and clinics.</p>
         </div>
+        <Link to="/patient/appointments" className={styles.btnSecondary}>My appointments</Link>
+      </header>
 
-        <h1 className={styles.heroTitle}>Let&apos;s find your top doctor!</h1>
-
-        {/* Search Bar */}
-        <div className={styles.searchBarBox}>
-          <svg className={styles.searchIconSvg} fill="none" stroke="#94A3B8" strokeWidth="2.2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-          </svg>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder="Search health issue or doctor..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
+      <div className={styles.searchWrap}>
+        <input
+          type="search"
+          className={styles.searchInput}
+          placeholder="Search doctor, specialty or hospital"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="Search sessions"
+        />
       </div>
 
-      {/* ── Categories Section ── */}
-      <div className={styles.categoriesSection}>
-        <h2 className={styles.sectionHeading}>Categories</h2>
-        <div className={styles.categoriesRow}>
-          {CATEGORY_ITEMS.map((cat) => (
-            <button
-              key={cat.key}
-              type="button"
-              className={`${styles.categoryCard} ${activeCategory === cat.key ? styles.activeCategoryCard : ''}`}
-              onClick={() => setActiveCategory(cat.key)}
-            >
-              <div className={styles.categoryIconCircle} style={{ background: cat.bg, color: cat.color }}>
-                <span>{cat.icon}</span>
-              </div>
-              <span className={styles.categoryLabel}>{cat.label}</span>
-            </button>
-          ))}
-        </div>
+      <div className={styles.chips} role="group" aria-label="Filter by specialty">
+        {['', ...SPECIALTIES].map((s) => (
+          <button
+            key={s || 'all'}
+            type="button"
+            className={`${styles.chip} ${specialty === s ? styles.chipActive : ''}`}
+            aria-pressed={specialty === s}
+            onClick={() => chooseSpecialty(s)}
+          >{s || 'All'}</button>
+        ))}
       </div>
 
-      {/* ── Top Doctor List Section ── */}
-      <div className={styles.doctorListSection}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.875rem' }}>
-          <h2 className={styles.sectionHeading}>Top Doctors</h2>
-          <span className={styles.slotCountText}>
-            {loading ? 'Loading...' : `${filteredSlots.length} available`}
-          </span>
+      {notice && <div className={styles.notice} role="status">{notice}</div>}
+
+      {status === 'loading' && (
+        <div aria-busy="true" aria-label="Loading sessions">
+          <div className={styles.skeletonRow}>
+            {[0, 1, 2, 3, 4].map((i) => <div key={i} className={`skeleton-box ${styles.skDate}`} />)}
+          </div>
+          {[0, 1].map((i) => <div key={i} className={`skeleton-box ${styles.skCard}`} />)}
         </div>
+      )}
 
-        {error && <div className={styles.errorBox}>{error}</div>}
+      {status === 'error' && (
+        <div className={styles.stateBox} role="alert">
+          <p>{error || 'Could not load sessions.'}</p>
+          <button type="button" className={styles.btnPrimary} onClick={reload}>Try again</button>
+        </div>
+      )}
 
-        {loading && (
-          <div className={styles.skeleton}>
-            {[1, 2, 3].map((i) => (
-              <div key={i} className={styles.skeletonCard} />
+      {status === 'ready' && slots.length === 0 && (
+        <div className={styles.stateBox}>
+          <p>No open sessions match your search.</p>
+          {(specialty || search) && <button type="button" className={styles.btnSecondary} onClick={clearFilters}>Clear filters</button>}
+        </div>
+      )}
+
+      {status === 'ready' && slots.length > 0 && (
+        <>
+          <div className={styles.dateRow} role="tablist" aria-label="Choose a date">
+            {dates.map((d) => (
+              <button
+                key={d}
+                type="button"
+                role="tab"
+                aria-selected={d === activeDate}
+                className={`${styles.dateBtn} ${d === activeDate ? styles.dateActive : ''}`}
+                onClick={() => setPickedDate(d)}
+              >
+                <span className={styles.dateDay}>{formatSlotDate(d, { weekday: 'short' })}</span>
+                <span className={styles.dateNum}>{formatSlotDate(d, { day: 'numeric' })}</span>
+                <span className={styles.dateMonth}>{formatSlotDate(d, { month: 'short' })}</span>
+                <span className={styles.dateCount}>{countByDate[d]} open</span>
+              </button>
             ))}
           </div>
-        )}
 
-        {!loading && filteredSlots.length === 0 && (
-          <div className={styles.emptyCard}>
-            <p className={styles.emptyTitle}>No doctors found</p>
-            <p className={styles.emptyDesc}>Try selecting &quot;All&quot; categories or adjusting your search term.</p>
+          <div className={styles.doctorGrid}>
+            {groups.map((g) => (
+              <article key={g.key} className={styles.doctorCard}>
+                <div className={styles.doctorHead}>
+                  <div className={styles.avatar} aria-hidden="true">{initials(g.doctor)}</div>
+                  <div className={styles.doctorInfo}>
+                    <h3 className={styles.doctorName}>{g.doctor}</h3>
+                    <p className={styles.doctorSpec}>{g.specialty}</p>
+                    <p className={styles.doctorOrg}>{g.org}</p>
+                  </div>
+                </div>
+                <div className={styles.times}>
+                  {g.times.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={styles.timeBtn}
+                      onClick={() => { setSelected(s); setBookError(''); }}
+                      aria-label={`Book ${g.doctor} on ${formatSlotLong(s.date, s.time)}`}
+                    >{formatSlotTime(s.date, s.time)}</button>
+                  ))}
+                </div>
+              </article>
+            ))}
           </div>
-        )}
+        </>
+      )}
 
-        <div className={styles.doctorListGrid}>
-          {filteredSlots.map((slot, idx) => {
-            const rating = (4.8 + (idx % 3) * 0.1).toFixed(1);
-            const isFav = favorites[slot.id];
-
-            return (
-              <div key={slot.id} className={styles.doctorCard}>
-                {/* Doctor Avatar with Green Online Dot */}
-                <div className={styles.doctorAvatarWrapper}>
-                  <div className={styles.doctorAvatarCircle}>
-                    <span>{getInitials(slot.doctor)}</span>
-                  </div>
-                  <span className={styles.onlineBadge} />
-                  <div className={styles.ratingBadge}>
-                    <span>⭐ {rating}</span>
-                  </div>
-                </div>
-
-                {/* Doctor Info */}
-                <div className={styles.doctorBody}>
-                  <h3 className={styles.doctorName}>{slot.doctor}</h3>
-                  <p className={styles.doctorSpecialty}>
-                    {slot.specialty || 'Specialist Physician'} • {slot.org}
-                  </p>
-
-                  {/* Actions Row: Appointment Button + Chat Icon + Heart Icon */}
-                  <div className={styles.doctorActionsRow}>
-                    <button
-                      type="button"
-                      className={styles.btnAppointmentPill}
-                      onClick={() => handleOpenBookingModal(slot)}
-                    >
-                      Appointment
-                    </button>
-
-                    <button
-                      type="button"
-                      className={styles.iconCircleBtn}
-                      onClick={() => navigate('/patient/triage')}
-                      title="AI Chat Triage"
-                    >
-                      💬
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`${styles.iconCircleBtn} ${isFav ? styles.favActive : ''}`}
-                      onClick={(e) => toggleFavorite(e, slot.id)}
-                      title="Favorite Doctor"
-                    >
-                      {isFav ? '❤️' : '🤍'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── DOCTOR APPOINTMENT BOOKING MODAL (Mockup 2 Design) ── */}
-      {selectedDoctorSlot && (
-        <div className={styles.modalOverlay} onClick={() => setSelectedDoctorSlot(null)}>
-          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
-            {/* Top Modal Header */}
-            <div className={styles.modalTopHeader}>
-              <button type="button" className={styles.modalBackBtn} onClick={() => setSelectedDoctorSlot(null)}>
-                ←
-              </button>
-              <h3 className={styles.modalHeadingTitle}>Appointment</h3>
-              <div style={{ width: 28 }} />
-            </div>
-
-            {/* Doctor Info Hero */}
-            <div className={styles.modalDoctorHero}>
-              <div className={styles.modalAvatarWrapper}>
-                <div className={styles.modalAvatarCircle}>
-                  <span>{getInitials(selectedDoctorSlot.doctor)}</span>
-                </div>
-                <span className={styles.onlineBadge} />
-              </div>
-              <h2 className={styles.modalDoctorName}>{selectedDoctorSlot.doctor}</h2>
-              <p className={styles.modalDoctorSub}>💖 {selectedDoctorSlot.specialty} Specialist</p>
-
-              {/* Teal Stats Box */}
-              <div className={styles.tealStatPanel}>
-                <div className={styles.statWhitePill}>
-                  <strong className={styles.statPillNumber}>350+</strong>
-                  <span className={styles.statPillLabel}>Patients</span>
-                </div>
-                <div className={styles.statWhitePill}>
-                  <strong className={styles.statPillNumber} style={{ color: '#10B981' }}>15+</strong>
-                  <span className={styles.statPillLabel}>Exp. years</span>
-                </div>
-                <div className={styles.statWhitePill}>
-                  <strong className={styles.statPillNumber} style={{ color: '#F43F5E' }}>284+</strong>
-                  <span className={styles.statPillLabel}>Reviews</span>
-                </div>
-              </div>
-            </div>
-
-            {/* About Doctor Section */}
-            <div className={styles.modalSection}>
-              <h4 className={styles.modalSectionTitle}>About Doctor</h4>
-              <p className={styles.modalSectionDesc}>
-                {selectedDoctorSlot.doctor} is a top specialist physician at {selectedDoctorSlot.org}. Available for private consultation, medical triage, and in-person appointments.
-              </p>
-            </div>
-
-            {/* Schedules Date Selector */}
-            <div className={styles.modalSection}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <h4 className={styles.modalSectionTitle}>Schedules</h4>
-                <span style={{ fontSize: '0.8125rem', color: '#0F9C8E', fontWeight: '700' }}>August &gt;</span>
-              </div>
-              <div className={styles.datesGrid}>
-                {DATE_SCHEDULES.map((d) => (
-                  <button
-                    key={d.day}
-                    type="button"
-                    className={`${styles.dateChip} ${selectedDate === d.day ? styles.activeDateChip : ''}`}
-                    onClick={() => setSelectedDate(d.day)}
-                  >
-                    <strong className={styles.dateNum}>{d.day}</strong>
-                    <span className={styles.dateDay}>{d.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Visit Hour Time Selector */}
-            <div className={styles.modalSection}>
-              <h4 className={styles.modalSectionTitle}>Visit Hour</h4>
-              <div className={styles.timeGrid}>
-                {VISIT_HOURS.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    className={`${styles.timeChip} ${selectedTime === t ? styles.activeTimeChip : ''}`}
-                    onClick={() => setSelectedTime(t)}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Book Appointment Full Button */}
-            <button
-              type="button"
-              className={styles.modalBookBtn}
-              onClick={handleConfirmBooking}
-              disabled={confirming !== null}
-            >
-              {confirming ? 'Confirming Appointment...' : 'Book Appointment'}
-            </button>
-          </div>
-        </div>
+      {selected && (
+        <ConfirmSheet slot={selected} busy={booking} error={bookError} onConfirm={confirm} onClose={closeSheet} />
       )}
     </div>
   );
 }
 
 export default AvailableSlots;
-

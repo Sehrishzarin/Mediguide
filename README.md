@@ -1,4 +1,4 @@
-# 🏥 MediGuide — AI Clinical Triage & Dual-Source Healthcare System
+# 🏥 MediGuide — AI Clinical Triage & Healthcare Navigation
 
 MediGuide is an intelligent, mobile-first healthcare navigation platform designed for busy individuals (working professionals, shift workers, 24/7 parents). The application minimizes user hesitation and confusion about seeking medical care by evaluating physical symptoms against the patient's full medical profile, providing authoritative guidance on **whether a hospital visit is necessary or if home care is safe**, and connecting them to nearby healthcare facilities.
 
@@ -30,16 +30,12 @@ MediGuide is an intelligent, mobile-first healthcare navigation platform designe
   4. Emergency Contact Details & Address
   5. Location & Voice Microphone Permissions Setup
   6. Completion Celebration & Dashboard Launch
-- **Local Persistence**: Remembers completed state (`localStorage.getItem('mediguide_onboarded')`).
+- **Saved on the account**: completion is stored server-side (`onboardingCompleted`), so it follows the user across devices and every step can be skipped.
 
-### 4. 🏥 Dual-Source Healthcare Facilities & Map (Leaflet / OpenStreetMap)
-- **🟢 Type A: Registered MediGuide Partner Organizations**:
-  - Registered healthcare centers with direct in-app doctor session booking.
-  - **Verified In-App Patient Reviews**: View verified ratings/reviews and submit new 1-5 star patient reviews.
-- **🔵 Type B: Nearby Google Maps Public Facilities**:
-  - Dynamically fetched based on the patient's live GPS coordinates.
-  - Displays Google star ratings, public review counts, place snippets, direct phone calls, and directions.
-- **Interactive Filter Pills**: Segmented pill control (`All Facilities`, `🟢 MediGuide Partners`, `🔵 Google Maps`) that dynamically filters both card carousels and map markers in real-time.
+### 4. 🏥 Healthcare Facilities & Map (Leaflet / OpenStreetMap)
+- **🟢 MediGuide partners**: organizations that registered and were approved by an admin; they offer in-app doctor session booking and verified patient reviews (signed-in patients, one review each).
+- **🔵 Public facilities**: nearby hospitals listed for navigation (call + directions), not bookable.
+- **Interactive filter pills** (`All`, `MediGuide partners`, `Public facilities`) filter both the list and the map markers.
 
 ### 5. 📋 Deep Patient Medical Profile Context Integration
 - **Complete Health Background Sync**: Evaluates reported symptoms against:
@@ -64,9 +60,9 @@ MediGuide is an intelligent, mobile-first healthcare navigation platform designe
 ## 🛠️ Tech Stack
 
 ### Frontend
-- **Framework**: React 18 (Vite)
-- **Mobile Native Bridge**: Capacitor v7 (`@capacitor/core`, `@capacitor/app`, `@capacitor/android`)
-- **Routing**: React Router v6
+- **Framework**: React 19 (Vite)
+- **Mobile Native Bridge**: Capacitor v8 (`@capacitor/core`, `@capacitor/app`, `@capacitor/android`)
+- **Routing**: React Router v7
 - **Maps**: Leaflet & React-Leaflet (OpenStreetMap Tiles)
 - **Voice Recognition**: Native Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`)
 - **Styling**: CSS Modules with modern responsive layout & Design Tokens (`index.css`)
@@ -86,20 +82,20 @@ Mediguide/
 ├── backend/
 │   ├── src/
 │   │   ├── config/          # Database connection setup
-│   │   ├── controllers/     # AI, Auth, and Organization business logic
+│   │   ├── controllers/     # AI, Auth, Organization, Slot (booking) and File logic
 │   │   ├── middlewares/     # JWT authentication & role authorization
-│   │   ├── models/          # Mongoose schemas (User, Organization)
+│   │   ├── models/          # Mongoose schemas (User, Organization, Slot, File)
 │   │   ├── routes/          # Express route definitions
-│   │   └── seeders/         # Bulk data seeder script (seedBulkData.js)
+│   │   └── seeders/         # Demo data seeder (organizationSeeder.js)
 │   ├── .env.example         # Environment variable template
 │   ├── package.json
 │   └── server.js            # Node/Express server entry point
 ├── frontend/
 │   ├── android/             # Capacitor Android Native Project Scaffold
 │   ├── src/
-│   │   ├── components/      # HospitalMap, MedicalProfileEditor, OnboardingWizard, Spinner, etc.
-│   │   ├── context/         # AuthContext & PatientContext
-│   │   ├── pages/           # Patient Home, Triage, Profile, Slots, Admin, Org
+│   │   ├── components/      # HospitalMap, route guards, Spinner, etc.
+│   │   ├── context/         # AuthContext (single source of user state)
+│   │   ├── pages/           # auth, patient (home, onboarding, profile, slots...), org, admin
 │   │   ├── services/        # API service layer (fetch wrappers)
 │   │   ├── App.jsx          # Route definitions & providers
 │   │   ├── index.css        # Design tokens & global CSS variables
@@ -117,7 +113,7 @@ Mediguide/
 ### Prerequisites
 - **Node.js**: v18.0.0 or higher
 - **npm**: v9.0.0 or higher
-- **MongoDB** *(Optional)*: Local MongoDB instance or MongoDB Atlas URI (Server includes an automatic standby fallback mode if MongoDB is offline).
+- **MongoDB**: a local instance or a MongoDB Atlas URI (required; the API refuses to start without it).
 
 ### 1. Clone the Repository
 ```bash
@@ -141,22 +137,21 @@ npm install
 
 ### 3. Environment Configuration
 
-Create a `.env` file inside the `backend/` directory:
-```env
-PORT=5000
-NODE_ENV=development
-MONGO_URI=mongodb://127.0.0.1:27017/mediguide
-JWT_SECRET=mediguide_super_secret_jwt_key_2026
-JWT_EXPIRE=30d
-GEMINI_API_KEY=your_gemini_api_key_here
+Copy the templates and fill them in:
+```bash
+cp backend/.env.example backend/.env       # MONGODB_URI, JWT_SECRET, CLIENT_ORIGIN, optional GEMINI_API_KEY
+cp frontend/.env.example frontend/.env.local   # VITE_API_BASE_URL=http://localhost:5000/api
 ```
+`JWT_SECRET` must be a long random string. In production set `CLIENT_ORIGIN` to your deployed frontend origin
+(comma separated for several). Without `GEMINI_API_KEY` the built-in local triage engine answers instead.
 
-### 4. Seed Bulk Healthcare Data
-Populate registered partner organizations and verified patient reviews:
+### 4. Seed Demo Data
+Creates the demo accounts, partner organizations, public facilities and a week of bookable doctor sessions:
 ```bash
 cd backend
-node src/seeders/seedBulkData.js
+npm run seed
 ```
+Re-running it resets organizations and sessions (and the demo account passwords) but never deletes real sign-ups.
 
 ### 5. Run the Application
 
@@ -174,6 +169,9 @@ npm run dev
 ```
 *(Runs on `http://localhost:5173`)*
 
+> **Hosting note:** free tiers such as Render put the API to sleep when idle, so the very first request can take
+> ~30-50 s. The app pings `/api/health` as soon as it loads to wake the server early.
+
 ---
 
 ## 🔑 Demo Login Credentials
@@ -181,26 +179,34 @@ npm run dev
 | Role | Email | Password | Access |
 | :--- | :--- | :--- | :--- |
 | **Patient User** | `user@mediguide.com` | `userpassword123` | Full patient triage, profile & map |
-| **Healthcare Org** | `hospital@mediguide.com` | `orgpassword123` | Hospital dashboard & doctor management |
-| **System Admin** | `admin@mediguide.com` | `adminpassword123` | Admin system controls |
+| **Healthcare Org** | `org@mediguide.com` | `orgpassword123` | Facility, staff and document management |
+| **System Admin** | `admin@mediguide.com` | `adminpassword123` | Approve / reject organizations |
 
 ---
 
 ## 📡 Core API Endpoints
 
-### 🤖 AI Triage & Counseling
-- `POST /api/ai/triage`: Evaluates symptom text against patient profile and chat history.
+All routes live under `/api`. 🔒 = needs `Authorization: Bearer <token>`.
 
-### 👤 Authentication & Patient Profile
-- `POST /api/auth/login`: User & organization sign in.
-- `POST /api/auth/signup`: Patient registration.
-- `GET /api/auth/me`: Get current authenticated user profile.
-- `PUT /api/auth/profile`: Update medical profile, address, phone, DOB, and blood group.
+### Auth & account
+- `POST /auth/register` — sign up as a patient or organization (admin accounts can never be self-registered)
+- `POST /auth/login` · 🔒 `GET /auth/me` · 🔒 `PUT /auth/profile` (partial update, also sets `onboardingCompleted`)
+- 🔒 `PUT /auth/password` · 🔒 `DELETE /auth/me` (password confirmation; removes the account's data)
 
-### 🏥 Healthcare Organizations & Reviews
-- `GET /api/organizations`: List registered partner organizations.
-- `GET /api/organizations/nearby?lat=...&lng=...`: Fetch dual-source nearby facilities (Partners + Google Maps).
-- `POST /api/organizations/:id/reviews`: Submit in-app patient review and 1-5 star rating.
+### AI triage
+- 🔒 `POST /ai/triage` — rate limited; uses the signed-in patient's stored medical profile
+
+### Facilities & reviews
+- `GET /organizations` · `GET /organizations/nearby?lat=&lng=` (nearest approved partners + public facilities)
+- 🔒 `POST /organizations/:id/reviews` (patients, one review per facility)
+- 🔒 organizations: `GET /organizations/mine`, `POST /organizations`, `POST|DELETE /organizations/:id/staff`
+- 🔒 admin: `GET /organizations/admin/pending`, `PUT /organizations/:id/status`
+
+### Doctor sessions
+- 🔒 `GET /slots` · `POST /slots/:id/book` (atomic) · `GET /slots/mine` · `DELETE /slots/:id/book`
+
+### Files (test reports, verification documents, max 2 MB)
+- 🔒 `GET /files` · `POST /files` · `GET /files/:id/download` · `DELETE /files/:id`
 
 ---
 

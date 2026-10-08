@@ -1,548 +1,345 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { usePatient } from './PatientContext';
-import * as api from '../../services/api';
-import HospitalMap from '../../components/HospitalMap';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { submitTriageSymptom } from '../../services/api';
+import ChatMessage from './ChatMessage';
+import { loadSessions, saveSessions, newId, slimResult, MAX_SESSIONS, MAX_MESSAGES } from './chatStorage';
 import styles from './SymptomInput.module.css';
 
-const QUICK_CHIPS = ['Skin rash', 'Headache', 'Fever', 'Stomach pain', 'Chest pain', 'Cough', 'Back pain', 'Nausea'];
+const QUICK_TOPICS = ['Headache', 'Fever', 'Cough', 'Stomach pain', 'Skin rash', 'Back pain', 'Chest pain'];
+const HISTORY_TURNS = 8; // recent turns sent to the server (it keeps 12 at most)
+const SpeechRecognitionApi = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition) : undefined;
 
-export default function SymptomInput() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { user } = usePatient();
-  const chatEndRef = useRef(null);
+const friendlyError = (err) => {
+  if (err?.status === 429) return 'You are sending messages too quickly. Please wait a minute and try again.';
+  return err?.message || 'Something went wrong. Please try again.';
+};
 
-  // Multi-Chat Sessions State
-  const [sessions, setSessions] = useState(() => {
-    try {
-      const saved = localStorage.getItem('mediguide_ai_chats');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+const dayLabel = (iso) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+};
 
-  const [activeSessionId, setActiveSessionId] = useState(null);
-  const [showHistorySidebar, setShowHistorySidebar] = useState(false);
-
-  // Active Chat State
-  const [messages, setMessages] = useState([]);
+function Consultation({ userId, startFresh }) {
+  const [sessions, setSessions] = useState(() => loadSessions(userId));
+  const [activeId, setActiveId] = useState(() => (startFresh ? null : loadSessions(userId)[0]?.id ?? null));
   const [text, setText] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [showMapInline, setShowMapInline] = useState(false);
-  const [latestTriageResult, setLatestTriageResult] = useState(null);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState(null); // { sessionId, text, history, message }
+  const [replyTo, setReplyTo] = useState('');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [listening, setListening] = useState(false);
+  const [voiceNote, setVoiceNote] = useState('');
 
-  const createNewChatSession = () => {
-    const newSession = {
-      id: 'session_' + Date.now(),
-      title: 'New Consultation',
-      createdAt: new Date().toISOString(),
-      messages: [
-        {
-          id: 'welcome_1',
-          sender: 'ai',
-          text: 'Hello! I am your MediGuide AI Health Counselor. Describe your symptoms or pick a quick topic below to begin.'
-        }
-      ]
+  const scrollRef = useRef(null);
+  const nearBottomRef = useRef(true);
+  const textareaRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const voiceBaseRef = useRef('');
+
+  const active = useMemo(() => sessions.find((s) => s.id === activeId) || null, [sessions, activeId]);
+  const messages = useMemo(() => (active ? active.messages : []), [active]);
+  const lastMessage = messages[messages.length - 1];
+  const lastAiId = useMemo(() => [...messages].reverse().find((m) => m.sender === 'ai')?.id, [messages]);
+
+  // Persist whenever the list changes
+  useEffect(() => { saveSessions(userId, sessions); }, [userId, sessions]);
+
+  // Stop the microphone if we leave the page
+  useEffect(() => () => { recognitionRef.current?.abort?.(); }, []);
+
+  // Keep the textarea sized to its content (re-measured after layout settles and on resize)
+  useEffect(() => {
+    const fit = () => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.style.height = 'auto';
+      el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
     };
-    setSessions((prev) => [newSession, ...prev]);
-    setActiveSessionId(newSession.id);
-    setMessages(newSession.messages);
-    setShowMapInline(false);
-    setLatestTriageResult(null);
-    setShowHistorySidebar(false);
+    fit();
+    const frame = requestAnimationFrame(fit);
+    window.addEventListener('resize', fit);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener('resize', fit); };
+  }, [text]);
+
+  // Follow new messages only when the reader is already near the bottom (or just sent one)
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && (nearBottomRef.current || lastMessage?.sender === 'user')) {
+      const rows = el.querySelectorAll('[data-row]');
+      const last = rows[rows.length - 1];
+      // A long assistant reply (e.g. an emergency banner) should be read from its top
+      const tall = lastMessage?.sender === 'ai' && !pending && last && last.offsetHeight > el.clientHeight - 48;
+      el.scrollTo({ top: tall ? last.offsetTop - 12 : el.scrollHeight, behavior: 'smooth' });
+    }
+  }, [lastMessage, pending, error]);
+
+  // Opening a different conversation always starts at the latest message
+  useEffect(() => {
+    nearBottomRef.current = true;
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [activeId]);
+
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (el) nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
   };
 
-  // Handle URL Location & Search Parameters (?new=true, ?history=true, ?session=id, /patient/history)
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const isNew = params.get('new') === 'true';
-    const isHistory = location.pathname === '/patient/history' || params.get('history') === 'true';
-    const requestedSessionId = params.get('session');
+  const appendMessages = useCallback((sessionId, newMessages, title) => {
+    setSessions((prev) => {
+      const exists = prev.some((s) => s.id === sessionId);
+      const updated = exists
+        ? prev.map((s) => (s.id === sessionId ? { ...s, messages: [...s.messages, ...newMessages].slice(-MAX_MESSAGES) } : s))
+        : [{ id: sessionId, title: title || 'Consultation', createdAt: newMessages[0].time, messages: newMessages }, ...prev];
+      // Most recent conversation first
+      const current = updated.find((s) => s.id === sessionId);
+      return [current, ...updated.filter((s) => s.id !== sessionId)].slice(0, MAX_SESSIONS);
+    });
+  }, []);
 
-    if (isNew) {
-      createNewChatSession();
-      navigate('/patient/triage', { replace: true });
-    } else if (isHistory) {
-      setShowHistorySidebar(true);
-    } else if (requestedSessionId) {
-      const found = sessions.find((s) => s.id === requestedSessionId);
-      if (found) {
-        switchChatSession(found);
-      }
-    } else if (sessions.length > 0 && !activeSessionId) {
-      setActiveSessionId(sessions[0].id);
-      setMessages(sessions[0].messages || []);
-    } else if (sessions.length === 0) {
-      createNewChatSession();
-    }
-  }, [location.search, location.pathname]);
-
-  // Save Sessions to localStorage
-  useEffect(() => {
-    if (sessions.length > 0) {
-      localStorage.setItem('mediguide_ai_chats', JSON.stringify(sessions));
-    }
-  }, [sessions]);
-
-  // Auto scroll to bottom of chat
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
-
-  const switchChatSession = (session) => {
-    setActiveSessionId(session.id);
-    setMessages(session.messages || []);
-    setShowHistorySidebar(false);
-    setShowMapInline(false);
-  };
-
-  const deleteChatSession = (e, sessionId) => {
-    e.stopPropagation();
-    const updated = sessions.filter((s) => s.id !== sessionId);
-    setSessions(updated);
-    if (activeSessionId === sessionId) {
-      if (updated.length > 0) {
-        setActiveSessionId(updated[0].id);
-        setMessages(updated[0].messages || []);
-      } else {
-        createNewChatSession();
-      }
-    }
-  };
-
-  const handleSendMessage = async (customText = '') => {
-    const symptomText = customText || text.trim();
-    if (!symptomText || loading) return;
-
-    setText('');
-    const userMsg = {
-      id: 'msg_user_' + Date.now(),
-      sender: 'user',
-      text: symptomText,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-
-    const updatedMessages = [...messages, userMsg];
-    setMessages(updatedMessages);
-    setLoading(true);
-
-    // Update session title if first user message
-    if (messages.length <= 1) {
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id === activeSessionId
-            ? { ...s, title: symptomText.length > 25 ? symptomText.substring(0, 25) + '...' : symptomText }
-            : s
-        )
-      );
-    }
-
+  const requestAi = useCallback(async (sessionId, message, history) => {
+    setPending(true);
+    setError(null);
     try {
-      const result = await api.submitTriageSymptom(symptomText, user?.medicalProfile, updatedMessages);
-      setLatestTriageResult(result);
-
-      const aiMsg = {
-        id: 'msg_ai_' + Date.now(),
+      const result = await submitTriageSymptom(message, history);
+      appendMessages(sessionId, [{
+        id: newId(),
         sender: 'ai',
-        isNonMedical: result.is_non_medical,
-        text: result.conversational_response || `Category: ${result.category}. Specialty: ${result.specialty}.`,
-        hospitalRecommendation: result.is_non_medical ? '' : result.hospital_recommendation,
-        profileImpactSummary: result.is_non_medical ? '' : result.profile_impact_summary,
-        triggerQuestion: result.is_non_medical ? '' : result.trigger_question,
-        precautionaryAdvice: result.is_non_medical ? '' : result.precautionary_advice,
-        category: result.is_non_medical ? '' : result.category,
-        specialty: result.is_non_medical ? '' : result.specialty,
-        urgency: result.is_non_medical ? 'none' : result.urgency_level,
-        showMap: result.is_non_medical ? false : (result.show_map || result.urgency_level === 'high'),
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-
-      const finalMessages = [...updatedMessages, aiMsg];
-      setMessages(finalMessages);
-
-      if (result.show_map || result.urgency_level === 'high') {
-        setShowMapInline(true);
-      }
-
-      // Update active session in list
-      setSessions((prev) =>
-        prev.map((s) => (s.id === activeSessionId ? { ...s, messages: finalMessages } : s))
-      );
-
+        text: result.conversational_response || 'I could not generate a response.',
+        result: slimResult(result),
+        time: new Date().toISOString()
+      }]);
     } catch (err) {
-      console.error('Chat error:', err);
-      const errorMsg = {
-        id: 'msg_err_' + Date.now(),
-        sender: 'ai',
-        text: 'I apologize, but I encountered a network issue. Please check your connection and try again.'
-      };
-      setMessages([...updatedMessages, errorMsg]);
+      setError({ sessionId, text: message, history, message: friendlyError(err) });
     } finally {
-      setLoading(false);
+      setPending(false);
     }
-  };
+  }, [appendMessages]);
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
-  const [isListening, setIsListening] = useState(false);
-
-  const toggleSpeechRecognition = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert('Speech recognition is not supported in this browser. Voice input is fully supported in Google Chrome, Edge, and Capacitor Android WebViews.');
-      return;
-    }
-
-    if (isListening) {
-      setIsListening(false);
-      return;
-    }
-
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      recognition.onstart = () => setIsListening(true);
-
-      recognition.onresult = (event) => {
-        const transcript = Array.from(event.results)
-          .map((r) => r[0].transcript)
-          .join('');
-        setText(transcript);
-      };
-
-      recognition.onerror = (err) => {
-        console.warn('Speech recognition error:', err);
-        setIsListening(false);
-      };
-
-      recognition.onend = () => setIsListening(false);
-
-      recognition.start();
-    } catch (err) {
-      console.error('Failed to start speech recognition:', err);
-      setIsListening(false);
-    }
-  };
-
-  const isHistoryTab = location.pathname === '/patient/history' || new URLSearchParams(location.search).get('history') === 'true';
-
-  if (isHistoryTab) {
-    return (
-      <div className={styles.triageLayout}>
-        <div className={styles.historyTabBanner}>
-          <div>
-            <h2 className={styles.historyTabTitle}>💬 AI Consultation History</h2>
-            <p className={styles.historyTabSub}>Review past symptom triage sessions & recommendations</p>
-          </div>
-          <button
-            type="button"
-            className={styles.btnNewChatHeader}
-            onClick={() => {
-              createNewChatSession();
-              navigate('/patient/triage');
-            }}
-          >
-            + New Consultation
-          </button>
-        </div>
-
-        <div className={styles.historyTabList}>
-          {sessions.length === 0 ? (
-            <div className={styles.emptyHistoryState}>
-              <p>No previous consultation history found.</p>
-              <button
-                type="button"
-                className={styles.btnNewChatHeader}
-                onClick={() => {
-                  createNewChatSession();
-                  navigate('/patient/triage');
-                }}
-              >
-                + Start First Consultation
-              </button>
-            </div>
-          ) : (
-            sessions.map((s) => (
-              <div
-                key={s.id}
-                className={`${styles.historyTabCard} ${s.id === activeSessionId ? styles.activeHistoryTabCard : ''}`}
-                onClick={() => {
-                  switchChatSession(s);
-                  navigate('/patient/triage');
-                }}
-              >
-                <div className={styles.historyCardBody}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <strong className={styles.historyCardTitle}>💬 {s.title}</strong>
-                    <span className={styles.historyCardDate}>{new Date(s.createdAt).toLocaleDateString()}</span>
-                  </div>
-                  <p className={styles.historyCardMeta}>{s.messages?.length || 0} messages exchange</p>
-                </div>
-                <div className={styles.historyCardActions}>
-                  <span className={styles.btnResumeLink}>Resume Chat →</span>
-                  <button
-                    type="button"
-                    className={styles.btnDeleteSession}
-                    onClick={(e) => deleteChatSession(e, s.id)}
-                    title="Delete Chat"
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+  const send = useCallback((raw) => {
+    const message = raw.trim();
+    if (!message || pending) return;
+    const sessionId = active?.id || newId();
+    const history = (active?.messages || []).slice(-HISTORY_TURNS).map((m) => ({ sender: m.sender, text: m.text }));
+    appendMessages(
+      sessionId,
+      [{ id: newId(), sender: 'user', text: message, time: new Date().toISOString() }],
+      message.length > 42 ? `${message.slice(0, 42)}...` : message
     );
-  }
+    setActiveId(sessionId);
+    setText('');
+    setReplyTo('');
+    requestAi(sessionId, message, history);
+  }, [active, pending, appendMessages, requestAi]);
+
+  const retry = () => {
+    if (error && !pending) requestAi(error.sessionId, error.text, error.history);
+  };
+
+  const startNew = () => {
+    recognitionRef.current?.abort?.();
+    setActiveId(null);
+    setError(null);
+    setText('');
+    setReplyTo('');
+    setDrawerOpen(false);
+    textareaRef.current?.focus();
+  };
+
+  const openSession = (id) => {
+    setActiveId(id);
+    setError(null);
+    setDrawerOpen(false);
+  };
+
+  const deleteSession = (id) => {
+    setSessions((prev) => prev.filter((s) => s.id !== id));
+    setConfirmDeleteId(null);
+    if (id === activeId) setActiveId(null);
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+    // On touch devices Enter is a newline; the send button submits
+    if (window.matchMedia('(pointer: coarse)').matches) return;
+    e.preventDefault();
+    send(text);
+  };
+
+  const pickQuestion = (question) => {
+    setReplyTo(question);
+    textareaRef.current?.focus();
+  };
+
+  // ---- Voice input ----
+  const toggleVoice = () => {
+    if (!SpeechRecognitionApi) {
+      setVoiceNote('Voice input is not supported in this browser. Please type your symptoms.');
+      return;
+    }
+    if (listening) { recognitionRef.current?.stop(); return; }
+    setVoiceNote('');
+    const rec = new SpeechRecognitionApi();
+    rec.lang = 'en-US';
+    rec.interimResults = true;
+    rec.continuous = false;
+    voiceBaseRef.current = text ? `${text.trim()} ` : '';
+    rec.onresult = (event) => {
+      const heard = Array.from(event.results).map((r) => r[0].transcript).join('');
+      setText(voiceBaseRef.current + heard);
+    };
+    rec.onerror = (event) => {
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        setVoiceNote('Microphone access was blocked. Allow it in your browser or device settings to use voice.');
+      } else if (event.error === 'no-speech') {
+        setVoiceNote('I did not hear anything. Tap the microphone and try again.');
+      } else if (event.error !== 'aborted') {
+        setVoiceNote('Voice input stopped unexpectedly. Please try again or type instead.');
+      }
+    };
+    rec.onend = () => { setListening(false); recognitionRef.current = null; };
+    recognitionRef.current = rec;
+    try { rec.start(); setListening(true); } catch { setVoiceNote('Could not start the microphone.'); }
+  };
+
+  const showError = Boolean(error) && error.sessionId === activeId;
 
   return (
-    <div className={styles.messengerLayout}>
-      {/* ── Left Messenger History Panel ── */}
-      <aside className={styles.messengerHistoryPanel}>
-        <div className={styles.historyPanelHeader}>
-          <div className={styles.historyHeaderTitleGroup}>
-            <h3 className={styles.historyPanelTitle}>💬 Consultations</h3>
-            <span className={styles.sessionCountBadge}>{sessions.length}</span>
-          </div>
-          <button
-            type="button"
-            className={styles.btnNewConsult}
-            onClick={createNewChatSession}
-            title="Start New Consult"
-          >
-            + New Consult
-          </button>
-        </div>
+    <div className={styles.shell}>
+      {drawerOpen && <button type="button" className={styles.scrim} aria-label="Close history" onClick={() => setDrawerOpen(false)} />}
 
-        <div className={styles.historySessionList}>
-          {sessions.length === 0 ? (
-            <div className={styles.emptyHistoryState}>
-              <p>No consultations yet.</p>
-              <button
-                type="button"
-                className={styles.btnNewConsult}
-                onClick={createNewChatSession}
-              >
-                + Start Consultation
-              </button>
-            </div>
-          ) : (
-            sessions.map((s) => (
-              <div
-                key={s.id}
-                className={`${styles.sessionItemCard} ${s.id === activeSessionId ? styles.activeSessionCard : ''}`}
-                onClick={() => switchChatSession(s)}
-              >
-                <div className={styles.sessionIconCircle}>💬</div>
-                <div className={styles.sessionCardBody}>
-                  <strong className={styles.sessionTitle}>{s.title}</strong>
-                  <span className={styles.sessionMeta}>
-                    {new Date(s.createdAt).toLocaleDateString()} • {s.messages?.length || 0} msgs
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className={styles.btnDeleteSession}
-                  onClick={(e) => deleteChatSession(e, s.id)}
-                  title="Delete consultation"
-                >
-                  ✕
-                </button>
-              </div>
-            ))
-          )}
+      <aside className={`${styles.history} ${drawerOpen ? styles.historyOpen : ''}`} aria-label="Consultation history">
+        <div className={styles.historyHead}>
+          <h2 className={styles.historyTitle}>History</h2>
+          <button type="button" className={styles.newBtn} onClick={startNew}>+ New</button>
+          <button type="button" className={`${styles.iconBtn} ${styles.drawerClose}`} aria-label="Close history" onClick={() => setDrawerOpen(false)}>&#10005;</button>
         </div>
+        <ul className={styles.sessionList}>
+          {sessions.length === 0 && <li className={styles.historyEmpty}>Your consultations will appear here.</li>}
+          {sessions.map((s) => (
+            <li key={s.id} className={`${styles.sessionItem} ${s.id === activeId ? styles.sessionActive : ''}`}>
+              {confirmDeleteId === s.id ? (
+                <div className={styles.confirmRow}>
+                  <span>Delete this chat?</span>
+                  <button type="button" className={styles.confirmYes} onClick={() => deleteSession(s.id)}>Delete</button>
+                  <button type="button" className={styles.confirmNo} onClick={() => setConfirmDeleteId(null)}>Keep</button>
+                </div>
+              ) : (
+                <>
+                  <button type="button" className={styles.sessionMain} onClick={() => openSession(s.id)}>
+                    <span className={styles.sessionName}>{s.title}</span>
+                    <span className={styles.sessionMeta}>{dayLabel(s.createdAt)} &middot; {s.messages.length} messages</span>
+                  </button>
+                  <button type="button" className={styles.iconBtn} aria-label={`Delete ${s.title}`} onClick={() => setConfirmDeleteId(s.id)}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14" /></svg>
+                  </button>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
       </aside>
 
-      {/* ── Right Messenger Chat Panel ── */}
-      <main className={styles.messengerChatPanel}>
-        {/* Top Chat Header */}
-        <div className={styles.chatHeaderBar}>
-          <div>
-            <h3 className={styles.chatSessionHeading}>
-              {sessions.find((s) => s.id === activeSessionId)?.title || 'New Consult'}
-            </h3>
-            <span className={styles.chatStatusSub}>AI Clinical Counseling & Triage</span>
-          </div>
-          <button type="button" className={styles.btnHeaderNewConsult} onClick={createNewChatSession}>
-            + New Consult
+      <section className={styles.chat} aria-label="AI consultation">
+        <header className={styles.chatHead}>
+          <button type="button" className={`${styles.iconBtn} ${styles.historyToggle}`} aria-label="Open history" onClick={() => setDrawerOpen(true)}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" /></svg>
           </button>
-        </div>
+          <div className={styles.chatHeadText}>
+            <h1 className={styles.chatTitle}>AI Health Counselor</h1>
+            <p className={styles.chatSub}>Guidance based on your symptoms and medical profile</p>
+          </div>
+          <button type="button" className={styles.newBtn} onClick={startNew}>+ New</button>
+        </header>
 
-        {/* Chat Thread Area */}
-        <div className={styles.chatThread}>
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={msg.sender === 'user' ? styles.userRow : styles.aiRow}
-            >
-              {msg.sender === 'ai' && (
-                <div className={styles.aiAvatar}>
-                  <svg className={styles.aiAvatarSvg} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
-                  </svg>
-                </div>
-              )}
-
-              <div className={msg.sender === 'user' ? styles.userBubble : styles.aiBubble}>
-                {msg.hospitalRecommendation && (
-                  <div className={msg.urgency === 'high' ? styles.recommendationUrgent : styles.recommendationNormal}>
-                    🏥 <strong>Clinical Recommendation:</strong> {msg.hospitalRecommendation}
-                  </div>
-                )}
-
-                {msg.profileImpactSummary && (
-                  <div className={styles.profileImpactBox}>
-                    📋 <strong>Patient History Context:</strong> {msg.profileImpactSummary}
-                  </div>
-                )}
-
-                <p className={styles.msgText}>{msg.text}</p>
-
-                {msg.triggerQuestion && (
-                  <div className={styles.triggerBox}>
-                    ❓ <strong>Follow-up Question:</strong> {msg.triggerQuestion}
-                  </div>
-                )}
-
-                {msg.precautionaryAdvice && (
-                  <div className={styles.adviceBox}>
-                    🛡️ <strong>Home Guidance:</strong> {msg.precautionaryAdvice}
-                  </div>
-                )}
-
-                {msg.category && (
-                  <div className={styles.badgeRow}>
-                    <span className={styles.categoryBadge}>{msg.category}</span>
-                    <span className={styles.specialtyBadge}>Recommended: {msg.specialty}</span>
-                  </div>
-                )}
-
-                {msg.timestamp && (
-                  <span className={styles.msgTime}>{msg.timestamp}</span>
-                )}
+        <div ref={scrollRef} className={styles.messages} onScroll={onScroll} role="log" aria-live="polite">
+          {messages.length === 0 && (
+            <div className={styles.intro}>
+              <div className={styles.introIcon} aria-hidden="true">&#10022;</div>
+              <h2>How are you feeling today?</h2>
+              <p>Describe your symptoms in your own words. I will suggest how urgent it is and which specialist to see.</p>
+              <div className={styles.topicRow}>
+                {QUICK_TOPICS.map((t) => (
+                  <button key={t} type="button" className={styles.topicChip} disabled={pending} onClick={() => send(`I have ${t.toLowerCase()}`)}>{t}</button>
+                ))}
               </div>
             </div>
+          )}
+
+          {messages.map((m) => (
+            <ChatMessage
+              key={m.id}
+              message={m}
+              isLatestAi={m.id === lastAiId && m === lastMessage}
+              canAsk={!pending}
+              onPickQuestion={pickQuestion}
+            />
           ))}
 
-          {loading && (
-            <div className={styles.aiRow}>
-              <div className={styles.aiAvatar}>
-                <svg className={styles.aiAvatarSvg} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
-                </svg>
-              </div>
-              <div className={styles.aiBubbleLoading}>
-                <span className={styles.dot} />
-                <span className={styles.dot} />
-                <span className={styles.dot} />
+          {pending && (
+            <div className={styles.msgRow}>
+              <div className={`${styles.bubble} ${styles.bubbleAi} ${styles.typing}`} aria-label="MediGuide is typing">
+                <span /><span /><span />
               </div>
             </div>
           )}
 
-          {/* Interactive Map rendered inside chat when triggered */}
-          {showMapInline && (
-            <div className={styles.inlineMapContainer}>
-              <HospitalMap filterSpecialty={latestTriageResult?.specialty} />
+          {showError && (
+            <div className={styles.msgRow}>
+              <div className={styles.errorBubble} role="alert">
+                <p>{error.message}</p>
+                <button type="button" className={styles.retryBtn} onClick={retry} disabled={pending}>Try again</button>
+              </div>
             </div>
           )}
-
-          <div ref={chatEndRef} />
         </div>
 
-        {/* Quick Suggestion Chips */}
-        {messages.length <= 2 && (
-          <div className={styles.chipsRow}>
-            {QUICK_CHIPS.map((chip) => (
-              <button
-                key={chip}
-                type="button"
-                className={styles.chip}
-                onClick={() => handleSendMessage(chip)}
-              >
-                {chip}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Dynamic Action Control Bar */}
-        <div className={styles.mapToggleBar}>
-          <button
-            type="button"
-            className={styles.btnToggleMap}
-            onClick={() => setShowMapInline(!showMapInline)}
-          >
-            {showMapInline ? '🗺️ Hide Hospital Map' : '🗺️ View Nearby Hospitals Map'}
-          </button>
-
-          {latestTriageResult?.specialty && latestTriageResult.specialty !== 'Emergency' && (
+        <div className={styles.composerWrap}>
+          <p className={styles.disclaimer}>MediGuide gives guidance, not a diagnosis. In an emergency call <a href="tel:1122">1122</a>.</p>
+          {voiceNote && <p className={styles.voiceNote} role="status">{voiceNote}</p>}
+          {replyTo && (
+            <div className={styles.replyBar}>
+              <span className={styles.replyText}>Answering: {replyTo}</span>
+              <button type="button" className={styles.iconBtn} aria-label="Clear" onClick={() => setReplyTo('')}>&#10005;</button>
+            </div>
+          )}
+          <form className={styles.composer} onSubmit={(e) => { e.preventDefault(); send(text); }}>
             <button
               type="button"
-              className={styles.btnBookSpecialist}
-              onClick={() => navigate('/patient/slots', { state: { specialty: latestTriageResult.specialty } })}
+              className={`${styles.micBtn} ${listening ? styles.micOn : ''}`}
+              onClick={toggleVoice}
+              aria-label={listening ? 'Stop voice input' : 'Start voice input'}
+              aria-pressed={listening}
             >
-              📅 Book {latestTriageResult.specialty}
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></svg>
             </button>
-          )}
-
-          {latestTriageResult?.urgency_level === 'high' && (
-            <button
-              type="button"
-              className={styles.btnEmergencyCall}
-              onClick={() => navigate('/patient/emergency')}
-            >
-              🚨 Emergency Direct Route
+            <textarea
+              ref={textareaRef}
+              className={styles.input}
+              rows={1}
+              value={text}
+              maxLength={2000}
+              placeholder={listening ? 'Listening...' : 'Describe your symptoms...'}
+              aria-label="Describe your symptoms"
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={onKeyDown}
+            />
+            <button type="submit" className={styles.sendBtn} disabled={pending || !text.trim()} aria-label="Send message">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4 20-7Z" /></svg>
             </button>
-          )}
+          </form>
         </div>
-
-        {/* Continuous Input Field with Speech Recognition */}
-        <div className={styles.inputArea}>
-          <button
-            type="button"
-            className={`${styles.btnMic} ${isListening ? styles.listeningMic : ''}`}
-            onClick={toggleSpeechRecognition}
-            title={isListening ? 'Listening to your voice...' : 'Speak your symptoms'}
-          >
-            {isListening ? '🎙️' : '🎤'}
-          </button>
-
-          <input
-            type="text"
-            className={styles.textInput}
-            placeholder={isListening ? 'Listening to voice...' : 'Type or speak symptoms for consult...'}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={loading}
-          />
-
-          <button
-            type="button"
-            className={styles.btnSend}
-            onClick={() => handleSendMessage()}
-            disabled={!text.trim() || loading}
-          >
-            <svg className={styles.sendSvg} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
-            </svg>
-          </button>
-        </div>
-      </main>
+      </section>
     </div>
   );
 }
 
+export default function SymptomInput() {
+  const { user } = useAuth();
+  const location = useLocation();
+  const startFresh = new URLSearchParams(location.search).get('new') === 'true';
+  // Remount on every navigation so "New consult" links always open a clean conversation
+  return <Consultation key={`${user.id}:${location.key}`} userId={user.id} startFresh={startFresh} />;
+}

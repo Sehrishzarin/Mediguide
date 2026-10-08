@@ -1,94 +1,46 @@
 const mongoose = require('mongoose');
 
 const OrganizationSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: [true, 'Please add organization name'],
-    trim: true
-  },
+  name: { type: String, required: [true, 'Please add organization name'], trim: true, maxlength: 120 },
   type: {
     type: String,
     enum: ['Hospital', 'Clinic', 'Pharmacy', 'Diagnostic Center'],
     default: 'Hospital'
   },
-  email: {
-    type: String,
-    lowercase: true,
-    default: ''
-  },
-  phone: {
-    type: String,
-    default: ''
-  },
-  address: {
-    type: String,
-    required: [true, 'Please add an address']
-  },
-  rating: {
-    type: Number,
-    min: 1,
-    max: 5,
-    default: 4.5
-  },
-  services: {
-    type: [String],
-    default: ['Emergency', 'General Checkup', 'Pharmacy']
-  },
-  isPartner: {
-    type: Boolean,
-    default: true
-  },
-  allowAppBooking: {
-    type: Boolean,
-    default: true
-  },
-  reviews: [
-    {
-      patientId: { type: mongoose.Schema.ObjectId, ref: 'User' },
-      patientName: { type: String, required: true },
-      rating: { type: Number, required: true, min: 1, max: 5 },
-      comment: { type: String, required: true },
-      visitDate: { type: String, default: '' },
-      createdAt: { type: Date, default: Date.now }
-    }
-  ],
-  averageRating: {
-    type: Number,
-    default: 4.5
-  },
-  totalReviews: {
-    type: Number,
-    default: 0
-  },
-  googlePlaceId: {
-    type: String,
-    default: ''
-  },
-  user: {
-    type: mongoose.Schema.ObjectId,
-    ref: 'User',
-    required: false
-  },
-  // GeoJSON Point location for geospatial MongoDB queries
+  email: { type: String, lowercase: true, trim: true, default: '' },
+  phone: { type: String, trim: true, default: '' },
+  address: { type: String, required: [true, 'Please add an address'], trim: true, maxlength: 200 },
+  services: { type: [String], default: [] },
+  // Partner = registered on MediGuide (bookable). Non-partner = public facility listing.
+  isPartner: { type: Boolean, default: true },
+  allowAppBooking: { type: Boolean, default: true },
+  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending', index: true },
+  owner: { type: mongoose.Schema.ObjectId, ref: 'User', index: true },
+  staff: [{
+    name: { type: String, required: true, trim: true, maxlength: 80 },
+    specialty: { type: String, trim: true, default: 'General Physician', maxlength: 60 }
+  }],
+  reviews: [{
+    patientId: { type: mongoose.Schema.ObjectId, ref: 'User' },
+    patientName: { type: String, required: true },
+    rating: { type: Number, required: true, min: 1, max: 5 },
+    comment: { type: String, required: true, maxlength: 600 },
+    visitDate: { type: String, default: '' },
+    createdAt: { type: Date, default: Date.now }
+  }],
+  averageRating: { type: Number, default: 0 },
+  totalReviews: { type: Number, default: 0 },
+  // Rating from public sources for non-partner listings
+  publicRating: { type: Number, default: 0 },
+  publicReviewsCount: { type: Number, default: 0 },
   location: {
-    type: {
-      type: String,
-      enum: ['Point'],
-      default: 'Point'
-    },
-    coordinates: {
-      type: [Number], // [longitude, latitude]
-      required: true
-    },
+    type: { type: String, enum: ['Point'], default: 'Point' },
+    coordinates: { type: [Number], required: true }, // [lng, lat]
     formattedAddress: String
   },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
+  createdAt: { type: Date, default: Date.now }
 });
 
-// Create 2DSphere index for geospatial location searching
 OrganizationSchema.index({ location: '2dsphere' });
 
 module.exports = mongoose.model('Organization', OrganizationSchema);

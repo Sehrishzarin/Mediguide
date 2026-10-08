@@ -8,6 +8,10 @@ const EMERGENCY_KEYWORDS = [
   'paralyzed', 'numbness', 'vision loss', 'dying', 'die', 'poison', 'overdose', 'excruciating'
 ];
 
+// Word-boundary match so e.g. "die" does not fire on "diet"
+const EMERGENCY_REGEX = new RegExp(`\\b(${EMERGENCY_KEYWORDS.join('|')})\\b`, 'i');
+const hasEmergencyKeyword = (text) => EMERGENCY_REGEX.test(text || '');
+
 const MEDICAL_KEYWORDS = [
   'pain', 'fever', 'headache', 'rash', 'cough', 'stomach', 'chest', 'breath',
   'bleed', 'sick', 'nausea', 'vomit', 'dizzy', 'hurt', 'swollen', 'throat',
@@ -21,7 +25,7 @@ const categorizeInput = (text, history = []) => {
   const lower = (text || '').trim().toLowerCase();
 
   // 0. Emergency keywords check ALWAYS takes highest precedence
-  const hasEmergency = EMERGENCY_KEYWORDS.some(k => lower.includes(k));
+  const hasEmergency = hasEmergencyKeyword(lower);
   if (hasEmergency) {
     return 'symptom_eval';
   }
@@ -69,7 +73,7 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
   const lower = (symptomText || '').toLowerCase();
 
   // Check emergency keywords in input
-  const isEmergency = EMERGENCY_KEYWORDS.some(k => lower.includes(k));
+  const isEmergency = hasEmergencyKeyword(lower);
 
   const chronic = (profile.preExistingConditions || []).join(' ').toLowerCase();
   const isPregnant = profile.pregnancyStatus && profile.pregnancyStatus !== 'N/A' && profile.pregnancyStatus !== 'Not Pregnant';
@@ -199,17 +203,22 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
 
 // @desc    Deep Clinical Triage & Dynamic Opinion Engine with Gemini AI
 // @route   POST /api/ai/triage
-// @access  Public / Private
+// @access  Private
 exports.evaluateTriageWithAI = async (req, res) => {
   try {
-    const { symptomText, patientProfile, chatHistory } = req.body;
-
-    if (!symptomText || typeof symptomText !== 'string' || !symptomText.trim()) {
+    const symptomText = typeof req.body.symptomText === 'string' ? req.body.symptomText.trim().slice(0, 2000) : '';
+    if (!symptomText) {
       return res.status(400).json({
         success: false,
         message: 'Please provide symptom text to analyze.'
       });
     }
+
+    // Use the stored medical profile, never one supplied by the client; keep the last 12 turns only
+    const patientProfile = req.user.medicalProfile ? req.user.medicalProfile.toObject() : {};
+    const chatHistory = (Array.isArray(req.body.chatHistory) ? req.body.chatHistory : [])
+      .slice(-12)
+      .map((m) => ({ sender: m && m.sender === 'user' ? 'user' : 'ai', text: String((m && m.text) || '').slice(0, 1500) }));
 
     const inputType = categorizeInput(symptomText, chatHistory || []);
 
@@ -321,16 +330,25 @@ CURRENT PATIENT MESSAGE:
 "${symptomText}"
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json'
-      },
-      contents: [promptText]
-    });
+    const response = await Promise.race([
+      ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json'
+        },
+        contents: [promptText]
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Gemini request timed out')), 12000))
+    ]);
 
     const resultJson = JSON.parse(response.text);
+
+    // Safety net: if red-flag symptoms are present the answer is always an emergency,
+    // whatever the model said.
+    if (hasEmergencyKeyword(symptomText) && !resultJson.emergency_flag) {
+      Object.assign(resultJson, evaluateLocalTriage(symptomText, patientProfile, chatHistory));
+    }
 
     return res.status(200).json({
       success: true,
@@ -340,7 +358,11 @@ CURRENT PATIENT MESSAGE:
 
   } catch (error) {
     console.error('Gemini AI Triage Error:', error);
-    const fallbackResult = evaluateLocalTriage(req.body.symptomText, req.body.patientProfile || {}, req.body.chatHistory || []);
+    const fallbackResult = evaluateLocalTriage(
+      String(req.body.symptomText || '').slice(0, 2000),
+      req.user && req.user.medicalProfile ? req.user.medicalProfile.toObject() : {},
+      []
+    );
     return res.status(200).json({
       success: true,
       source: 'fallback_ai_engine',

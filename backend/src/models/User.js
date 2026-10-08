@@ -2,26 +2,27 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
+const BLOOD_GROUPS = ['', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
 const UserSchema = new mongoose.Schema({
   name: {
     type: String,
     required: [true, 'Please add a name'],
-    trim: true
+    trim: true,
+    maxlength: [80, 'Name is too long']
   },
   email: {
     type: String,
     required: [true, 'Please add an email'],
     unique: true,
     lowercase: true,
-    match: [
-      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
-      'Please add a valid email'
-    ]
+    trim: true,
+    match: [/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/, 'Please add a valid email']
   },
   password: {
     type: String,
     required: [true, 'Please add a password'],
-    minlength: 6,
+    minlength: [8, 'Password must be at least 8 characters'],
     select: false
   },
   role: {
@@ -29,74 +30,66 @@ const UserSchema = new mongoose.Schema({
     enum: ['user', 'admin', 'organization'],
     default: 'user'
   },
-  phone: {
-    type: String,
-    default: ''
-  },
-  address: {
-    type: String,
-    default: ''
-  },
+  phone: { type: String, default: '', trim: true, maxlength: 30 },
+  address: { type: String, default: '', trim: true, maxlength: 200 },
+  onboardingCompleted: { type: Boolean, default: false },
   medicalProfile: {
-    bloodGroup: {
-      type: String,
-      enum: ['', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'],
-      default: ''
-    },
+    bloodGroup: { type: String, enum: BLOOD_GROUPS, default: '' },
     gender: { type: String, default: '' },
     pregnancyStatus: { type: String, default: 'N/A' },
     dateOfBirth: { type: String, default: '' },
-    height: { type: Number, default: 0 },
-    weight: { type: Number, default: 0 },
-    allergies: [{ type: String }],
-    preExistingConditions: [{ type: String }],
+    height: { type: Number, default: 0, min: 0, max: 300 },
+    weight: { type: Number, default: 0, min: 0, max: 700 },
+    allergies: [{ type: String, trim: true, maxlength: 80 }],
+    preExistingConditions: [{ type: String, trim: true, maxlength: 80 }],
     currentMedications: [{
-      name: { type: String },
-      dosage: { type: String },
-      frequency: { type: String }
+      _id: false,
+      name: { type: String, trim: true, maxlength: 80 },
+      dosage: { type: String, trim: true, maxlength: 40 },
+      frequency: { type: String, trim: true, maxlength: 40 }
     }],
     longTermTreatments: [{
-      treatmentName: { type: String },
-      notes: { type: String },
+      _id: false,
+      treatmentName: { type: String, trim: true, maxlength: 80 },
+      notes: { type: String, trim: true, maxlength: 300 },
       isOngoing: { type: Boolean, default: true }
     }],
+    notes: { type: String, default: '', maxlength: 1000 },
     emergencyContact: {
-      name: { type: String, default: '' },
-      relationship: { type: String, default: '' },
-      phone: { type: String, default: '' }
+      name: { type: String, default: '', trim: true, maxlength: 80 },
+      relationship: { type: String, default: '', trim: true, maxlength: 40 },
+      phone: { type: String, default: '', trim: true, maxlength: 30 }
     }
   },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
+  createdAt: { type: Date, default: Date.now }
 });
 
-// Encrypt password using bcrypt before save
-UserSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) {
-    next();
-  }
+// Hash the password only when it changed (async hooks must not call next())
+UserSchema.pre('save', async function () {
+  if (!this.isModified('password')) return;
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
 });
 
-// Sign JWT and return
-UserSchema.methods.getSignedJwtToken = function() {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error('JWT_SECRET environment variable is missing.');
-  }
-  return jwt.sign(
-    { id: this._id, role: this.role },
-    secret,
-    { expiresIn: process.env.JWT_EXPIRE || '30d' }
-  );
+UserSchema.methods.getSignedJwtToken = function () {
+  return jwt.sign({ id: this._id, role: this.role }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRE || '30d'
+  });
 };
 
-// Match user entered password to hashed password in database
-UserSchema.methods.matchPassword = async function(enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+UserSchema.methods.matchPassword = function (enteredPassword) {
+  return bcrypt.compare(enteredPassword, this.password);
+};
+
+// Safe public representation (never includes the password hash)
+UserSchema.methods.toClient = function () {
+  const o = this.toObject();
+  delete o.password;
+  delete o.__v;
+  o.id = String(o._id);
+  delete o._id;
+  return o;
 };
 
 module.exports = mongoose.model('User', UserSchema);
+module.exports.BLOOD_GROUPS = BLOOD_GROUPS;

@@ -327,3 +327,70 @@
     color: #ccfbf1;
   }
 }
+
+/* ── Additions: hints, demo logins, password toggle ──────────── */
+.hint {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+}
+
+.passwordWrap {
+  position: relative;
+}
+
+.passwordWrap .input {
+  padding-right: 4.25rem;
+}
+
+.showBtn {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0d9488;
+  padding: 0.25rem 0.5rem;
+}
+
+.demoBox {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px dashed rgba(255, 255, 255, 0.5);
+  border-radius: 0.875rem;
+  padding: 0.75rem;
+  color: #ffffff;
+  font-size: 0.8125rem;
+}
+
+.demoRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.demoChip {
+  background: #ffffff;
+  color: #0f766e;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 999px;
+}
+
+@media (max-width: 768px) {
+  .authContainer {
+    padding: 0 1.5rem 2rem;
+  }
+  .authPage {
+    padding-top: 1.5rem;
+  }
+  .hint {
+    color: rgba(255, 255, 255, 0.8);
+  }
+  .showBtn {
+    color: #0f766e;
+  }
+}

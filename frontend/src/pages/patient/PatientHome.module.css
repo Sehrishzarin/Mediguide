@@ -1,357 +1,137 @@
-/* ── Patient Home Dashboard Styles ──────────────────────────── */
+.container { max-width: 1280px; margin: 0 auto; }
 
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0;
+.portalGrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+.portalMainCol, .portalSideCol { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+
+@media (min-width: 1180px) {
+  .portalGrid { grid-template-columns: minmax(0, 1fr) minmax(380px, 440px); gap: 1.5rem; align-items: start; }
+  .portalSideCol { position: sticky; top: 1rem; }
 }
 
-.portalGrid {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-@media (min-width: 900px) {
-  .portalGrid {
-    display: grid;
-    grid-template-columns: 1.15fr 0.85fr;
-    gap: 1.5rem;
-    align-items: start;
-  }
-}
-
-.portalMainCol {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.portalSideCol {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  min-width: 0;
-}
-
-.mapPortalWrapper {
-  background: #ffffff;
-  border-radius: var(--radius-card);
-  border: 1px solid var(--color-border);
-  overflow: hidden;
-  box-shadow: var(--shadow-soft);
-}
-
-.quickProfileWidget {
-  background: #ffffff;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  padding: 1.125rem 1.25rem;
-  box-shadow: var(--shadow-soft);
-  display: flex;
-  flex-direction: column;
-  gap: 0.875rem;
-}
-
-.quickProfileHeader {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.quickProfileIcon {
-  font-size: 1.5rem;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: #F0FDFA;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #CCFBF1;
-}
-
-.quickProfileTitle {
-  font-size: 0.875rem;
-  font-weight: 800;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.quickProfileSub {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-  margin: 0;
-}
-
-.quickProfileBadges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.profileBadgeTag {
-  font-size: 0.75rem;
-  font-weight: 700;
-  background: var(--color-surface);
-  color: var(--color-primary);
-  border: 1px solid var(--color-border);
-  padding: 0.25rem 0.625rem;
-  border-radius: var(--radius-pill);
-}
-
-.btnEditProfilePortal {
-  display: inline-block;
-  font-size: 0.8125rem;
-  font-weight: 800;
-  color: var(--color-primary);
-  text-decoration: none;
-  transition: var(--transition-fast);
-}
-
-.btnEditProfilePortal:hover {
-  color: var(--color-primary-dark);
-}
-
-/* Rounded Gradient Hero Panel */
 .heroPanel {
   background: var(--color-primary-gradient);
+  color: #fff;
   border-radius: var(--radius-card);
-  padding: 1.25rem 1.5rem;
-  color: #ffffff;
+  padding: 1.5rem;
   box-shadow: var(--shadow-soft);
-  margin-bottom: 1.25rem;
-  position: relative;
-  overflow: hidden;
 }
+.welcomePill { display: inline-block; background: rgba(255, 255, 255, 0.22); padding: 3px 12px; border-radius: var(--radius-pill); font-size: 0.75rem; font-weight: 700; }
+.heroTitle { font-size: 1.75rem; font-weight: 800; margin-top: 0.5rem; line-height: 1.2; overflow-wrap: anywhere; }
+.heroSubtitle { margin-top: 0.25rem; font-size: 0.9375rem; opacity: 0.92; }
 
-.heroHeaderRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.welcomePill {
-  display: inline-block;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(4px);
-  color: #ffffff;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  padding: 0.25rem 0.625rem;
-  border-radius: var(--radius-pill);
-  margin-bottom: 0.375rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.heroTitle {
-  font-size: 1.375rem;
-  font-weight: 800;
-  margin: 0;
-  line-height: 1.2;
-}
-
-.heroSubtitle {
-  font-size: 0.8125rem;
-  opacity: 0.92;
-  margin-top: 0.25rem;
-  line-height: 1.4;
-}
-
-.heroAvatarCircle {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: #ffffff;
+/* Next appointment */
+.apptCard {
   display: flex;
   align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  flex-shrink: 0;
-}
-
-/* Horizontally Scrollable Category Pills */
-.categoryScrollRow {
-  display: flex;
-  gap: 0.5rem;
-  overflow-x: auto;
-  padding-bottom: 0.5rem;
-  margin-bottom: 1rem;
-  scrollbar-width: thin;
-}
-
-.categoryPill {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  background: #ffffff;
+  gap: 0.875rem;
+  background: #fff;
   border: 1px solid var(--color-border);
-  color: var(--color-text-primary);
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 0.5rem 0.875rem;
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: var(--transition-fast);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+  border-radius: var(--radius-card);
+  padding: 1rem;
+  box-shadow: var(--shadow-soft);
+  min-height: 44px;
+  transition: var(--transition-normal);
 }
-
-.categoryPill:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  transform: translateY(-1px);
-}
-
-.activeCategoryPill {
-  background: var(--color-primary) !important;
-  color: #ffffff !important;
-  border-color: var(--color-primary) !important;
-  box-shadow: 0 4px 12px rgba(15, 156, 142, 0.3) !important;
-}
-
-/* Elevated White Action Cards */
-.actionsList {
+a.apptCard:hover { box-shadow: var(--shadow-hover); border-color: var(--color-primary-light); }
+.apptSkeleton { height: 96px; border-radius: var(--radius-card); }
+.apptDate {
+  width: 56px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  align-items: center;
+  background: #E6F7F5;
+  color: var(--color-primary);
+  border-radius: 14px;
+  padding: 6px 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.apptDate strong { font-size: 1.375rem; line-height: 1.1; }
+.apptBody { flex: 1; min-width: 0; }
+.apptLabel { font-size: 0.6875rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: var(--color-primary); }
+.apptTitle { font-size: 1rem; font-weight: 800; color: var(--color-text-primary); overflow-wrap: anywhere; }
+.apptMeta { font-size: 0.8125rem; color: var(--color-text-muted); }
+.apptError { font-size: 0.8125rem; color: var(--color-danger); font-weight: 600; }
+.apptChevron { font-size: 1.75rem; color: var(--color-text-muted); }
+.apptBtn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 1.125rem;
+  border-radius: var(--radius-action);
+  background: var(--color-primary);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.875rem;
 }
 
+/* Profile nudge */
+.nudge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  border-radius: var(--radius-card);
+  padding: 0.875rem 1rem;
+  color: #92400E;
+  min-height: 44px;
+}
+.nudgeText { display: flex; flex-direction: column; gap: 2px; font-size: 0.8125rem; }
+.nudgeText strong { font-size: 0.9375rem; }
+.nudgeCta { flex-shrink: 0; font-weight: 800; font-size: 0.875rem; }
+
+/* Actions */
+.actionsList { display: flex; flex-direction: column; gap: 0.625rem; }
 .elevatedCard {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  background: var(--color-card);
+  gap: 0.875rem;
+  background: #fff;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  padding: 1rem 1.125rem;
+  padding: 0.875rem 1rem;
+  min-height: 72px;
   box-shadow: var(--shadow-soft);
-  text-decoration: none;
-  transition: var(--transition-fast);
+  transition: var(--transition-normal);
 }
+.elevatedCard:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+.cardLeftBadge { width: 48px; height: 48px; flex-shrink: 0; border-radius: 14px; display: flex; align-items: center; justify-content: center; }
+.cardBody { flex: 1; min-width: 0; }
+.cardTitle { font-size: 0.9375rem; font-weight: 800; color: var(--color-text-primary); }
+.cardDesc { font-size: 0.8125rem; color: var(--color-text-muted); }
+.cardChevron { font-size: 1.75rem; color: var(--color-text-muted); }
+.linkRow { display: flex; align-items: center; min-height: 44px; padding: 0 0.25rem; font-weight: 700; font-size: 0.875rem; color: var(--color-primary); }
 
-.elevatedCard:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-hover);
-  border-color: var(--color-primary-light);
-}
+/* Recent consultations */
+.recentConsultationsCard { background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-card); padding: 1rem; box-shadow: var(--shadow-soft); }
+.recentHeaderRow { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
+.recentTitle { font-size: 1rem; font-weight: 800; }
+.btnStartNewLink { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; font-size: 0.875rem; color: var(--color-primary); }
+.emptyRecentText { font-size: 0.875rem; color: var(--color-text-muted); padding: 0.5rem 0 0.25rem; }
+.recentList { display: flex; flex-direction: column; gap: 0.5rem; }
+.recentItem { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; min-height: 56px; padding: 0.625rem 0.875rem; background: var(--color-surface); border-radius: var(--radius-action); transition: var(--transition-fast); }
+.recentItem:hover { background: #E6F7F5; }
+.recentItemBody { display: flex; flex-direction: column; min-width: 0; }
+.recentItemTitle { font-size: 0.875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recentItemMeta { font-size: 0.75rem; color: var(--color-text-muted); }
+.resumeArrow { flex-shrink: 0; font-size: 0.8125rem; font-weight: 700; color: var(--color-primary); }
 
-.cardLeftBadge {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
+/* Map */
+.mapPortalWrapper { background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-card); padding: 1rem; box-shadow: var(--shadow-soft); min-width: 0; }
+.mapSkeleton { display: flex; flex-direction: column; gap: 0.75rem; }
+.mapSkeletonMap { height: 280px; border-radius: var(--radius-card); }
+.mapSkeletonRow { height: 80px; border-radius: var(--radius-card); }
 
-.cardBody {
-  flex: 1;
-}
+.container a:focus-visible { outline: 3px solid var(--color-primary-light); outline-offset: 2px; }
 
-.cardTitle {
-  font-size: 0.9375rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
-  margin: 0 0 0.125rem 0;
-}
-
-.cardDesc {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-  margin: 0;
-}
-
-.cardChevron {
-  color: var(--color-text-muted);
-  transition: transform 0.2s;
-}
-
-.elevatedCard:hover .cardChevron {
-  transform: translateX(3px);
-  color: var(--color-primary);
-}
-
-/* Recent AI Consultations Card */
-.recentConsultationsCard {
-  background: #ffffff;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  padding: 1rem 1.125rem;
-  box-shadow: var(--shadow-soft);
-  margin-top: 1.25rem;
-}
-
-.recentHeaderRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-}
-
-.recentTitle {
-  font-size: 0.9375rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.btnStartNewLink {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--color-primary);
-  text-decoration: none;
-}
-
-.emptyRecentText {
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-  margin: 0;
-}
-
-.recentList {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.recentItem {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.625rem 0.75rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-action);
-  cursor: pointer;
-  transition: var(--transition-fast);
-}
-
-.recentItem:hover {
-  border-color: var(--color-primary);
-  background: #F0Fdfa;
-}
-
-.recentItemBody {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.recentItemTitle {
-  font-size: 0.8125rem;
-  color: var(--color-text-primary);
-}
-
-.recentItemMeta {
-  font-size: 0.6875rem;
-  color: var(--color-text-muted);
-}
-
-.resumeArrow {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--color-primary);
+@media (max-width: 480px) {
+  .heroTitle { font-size: 1.5rem; }
+  .apptCard { flex-wrap: wrap; }
+  .nudge { flex-direction: column; align-items: flex-start; }
 }

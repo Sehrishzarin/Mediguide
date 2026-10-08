@@ -1,536 +1,217 @@
-import { useState, useEffect, useRef } from 'react';
-import { usePatient } from './PatientContext';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import Spinner from '../../components/Spinner';
-import ErrorToast from '../../components/ErrorToast';
-import * as api from '../../services/api';
+import { TextField, SelectField, TagInput, MedicationsEditor, TreatmentsEditor } from './profile/FormKit';
+import ReportsSection from './profile/ReportsSection';
+import AccountSection from './profile/AccountSection';
+import {
+  BLOOD_GROUPS, GENDERS, PREGNANCY_OPTIONS, LIMITS,
+  draftFromUser, payloadFromDraft, validateDraft, isDirty, completeness, todayISO
+} from './profile/profileModel';
 import styles from './PatientProfile.module.css';
 
-function TagInput({ tags, onChange, placeholder }) {
-  const [input, setInput] = useState('');
-  const addTag = () => {
-    const val = input.trim();
-    if (val && !tags.includes(val)) onChange([...tags, val]);
-    setInput('');
-  };
-  const removeTag = (idx) => onChange(tags.filter((_, i) => i !== idx));
+const SECTIONS = [
+  { id: 'personal', label: 'Personal info' },
+  { id: 'medical', label: 'Medical profile' },
+  { id: 'emergency', label: 'Emergency contact' },
+  { id: 'reports', label: 'Test reports' },
+  { id: 'account', label: 'Account & security' }
+];
 
+const initialsOf = (name) =>
+  (name || '?').trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() || '').join('') || '?';
+
+function Section({ id, title, description, active, children }) {
   return (
-    <div className={styles.tagContainer}>
-      <div className={styles.tagList}>
-        {tags.map((tag, idx) => (
-          <span key={idx} className={styles.tag}>
-            {tag}
-            <button type="button" onClick={() => removeTag(idx)} className={styles.tagRemove}>
-              <svg className={styles.tagRemoveSvg} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </span>
-        ))}
+    <section id={`section-${id}`} className={`${styles.card} ${active ? styles.sectionActive : styles.sectionHidden}`} aria-labelledby={`h-${id}`}>
+      <div className={styles.cardHead}>
+        <h2 id={`h-${id}`} className={styles.cardTitle}>{title}</h2>
+        {description && <p className={styles.cardDesc}>{description}</p>}
       </div>
-      <input
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            addTag();
-          }
-        }}
-        onBlur={addTag}
-        placeholder={tags.length === 0 ? placeholder : 'Add more...'}
-        className={styles.tagInput}
-      />
-    </div>
+      <div className={styles.cardBody}>{children}</div>
+    </section>
   );
 }
 
-function PatientProfile() {
-  const { user, login, logout: patientLogout } = usePatient();
-  const { logout: authLogout } = useAuth();
-  const navigate = useNavigate();
-
-  const fileRef = useRef(null);
-  const editFileRef = useRef(null);
-  const editingIdRef = useRef(null);
-
-  const [loading, setLoading] = useState(true);
+export default function PatientProfile() {
+  const { user, updateProfile } = useAuth();
+  const baseline = useMemo(() => draftFromUser(user), [user]);
+  const [draft, setDraft] = useState(baseline);
+  const [active, setActive] = useState('personal');
+  const [showErrors, setShowErrors] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [toast, setToast] = useState('');
-  const [reportActionId, setReportActionId] = useState(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [saveError, setSaveError] = useState('');
+  const [saved, setSaved] = useState(false);
+  const [today] = useState(todayISO);
+  const savedTimer = useRef(null);
 
-  const handleLogout = () => {
-    patientLogout();
-    if (authLogout) authLogout();
-    localStorage.removeItem('token');
-    localStorage.removeItem('mediguide_patient');
-    localStorage.removeItem('mediguide_user');
-    sessionStorage.clear();
-    navigate('/patient/login', { replace: true });
-  };
+  const dirty = isDirty(draft, baseline);
+  const errors = validateDraft(draft);
+  const errCount = Object.keys(errors).length;
+  const meter = useMemo(() => completeness(user), [user]);
 
-  // Personal Info Fields (Editable)
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [dob, setDob] = useState('');
-  const [address, setAddress] = useState('');
-
-  // Medical Profile Fields (Editable)
-  const [bloodType, setBloodType] = useState('');
-  const [gender, setGender] = useState('');
-  const [pregnancyStatus, setPregnancyStatus] = useState('N/A');
-  const [medications, setMedications] = useState([]);
-  const [conditions, setConditions] = useState([]);
-  const [allergies, setAllergies] = useState([]);
-  const [notes, setNotes] = useState('');
-  const [emergencyContact, setEmergencyContact] = useState({ name: '', relationship: '', phone: '' });
-
-  const [reports, setReports] = useState([]);
-  const [uploading, setUploading] = useState(false);
-
-  const initials = (name || user?.name || 'PU')
-    .split(' ')
-    .map(w => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-  const emailDisplay = user?.email || 'patient@mediguide.com';
-
+  // Warn before closing the tab with unsaved edits
   useEffect(() => {
-    (async () => {
-      try {
-        const token = localStorage.getItem('token');
-        let currentData = user;
+    if (!dirty) return undefined;
+    const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
 
-        if (token) {
-          try {
-            const meRes = await api.getCurrentUserProfile(token);
-            if (meRes.success && meRes.data) {
-              currentData = meRes.data;
-            }
-          } catch (e) {
-            console.warn('API get me fallback:', e);
-          }
-        }
+  useEffect(() => () => clearTimeout(savedTimer.current), []);
 
-        const med = currentData?.medicalProfile || {};
-        setName(currentData?.name || '');
-        setPhone(currentData?.phone || '');
-        setAddress(currentData?.address || '');
-        setDob(med.dateOfBirth || currentData?.dateOfBirth || currentData?.dob || '');
-        setBloodType(med.bloodGroup || currentData?.bloodGroup || currentData?.bloodType || '');
-        setGender(med.gender || currentData?.gender || '');
-        setPregnancyStatus(med.pregnancyStatus || currentData?.pregnancyStatus || 'N/A');
-        
-        const rawMeds = med.currentMedications || currentData?.medications || currentData?.ongoingMedications || [];
-        setMedications(rawMeds.map(m => typeof m === 'string' ? m : (m.name || m)));
-        
-        const rawConds = med.preExistingConditions || currentData?.preExistingConditions || currentData?.pastConditions || [];
-        setConditions(rawConds);
-        
-        setAllergies(med.allergies || currentData?.allergies || []);
-        setNotes(currentData?.overallNotes || currentData?.notes || '');
-        setEmergencyContact(med.emergencyContact || currentData?.emergencyContact || { name: '', relationship: '', phone: '' });
+  const set = (patch) => {
+    setSaved(false);
+    setSaveError('');
+    setDraft((d) => ({ ...d, ...patch }));
+  };
+  const err = (key) => (showErrors ? errors[key] : undefined);
 
-        const { reports: reps } = await api.getProfile();
-        setReports(reps || []);
-      } catch (err) {
-        setToast(err.message || 'Failed to load profile.');
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  const handleSave = async () => {
+  const save = async () => {
+    if (errCount) {
+      setShowErrors(true);
+      setSaveError('Please fix the highlighted fields before saving.');
+      return;
+    }
     setSaving(true);
-    setSaveSuccess(false);
-    setToast('');
-
-    const token = localStorage.getItem('token');
-
-    const formattedMedications = medications.map(m => typeof m === 'string' ? { name: m, dosage: '', frequency: '' } : m);
-
-    const updatePayload = {
-      name,
-      phone,
-      address,
-      medicalProfile: {
-        bloodGroup: bloodType,
-        gender,
-        pregnancyStatus,
-        dateOfBirth: dob,
-        allergies,
-        preExistingConditions: conditions,
-        currentMedications: formattedMedications,
-        emergencyContact
-      },
-      bloodGroup: bloodType,
-      bloodType: bloodType,
-      dateOfBirth: dob,
-      dob: dob,
-      gender,
-      pregnancyStatus,
-      ongoingMedications: medications,
-      medications,
-      pastConditions: conditions,
-      preExistingConditions: conditions,
-      allergies,
-      emergencyContact,
-      overallNotes: notes
-    };
-
+    setSaveError('');
     try {
-      if (token) {
-        await api.updateUserProfile(token, updatePayload);
-      }
-      await api.updateProfile(updatePayload);
-
-      // Update patient context and localStorage
-      const updatedUser = {
-        ...(user || {}),
-        ...updatePayload
-      };
-      login(updatedUser);
-      localStorage.setItem('mediguide_patient', JSON.stringify(updatedUser));
-      localStorage.setItem('mediguide_user', JSON.stringify(updatedUser));
-
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err) {
-      setToast(err.message || 'Failed to save profile changes.');
+      const updated = await updateProfile(payloadFromDraft(draft));
+      setDraft(draftFromUser(updated));
+      setShowErrors(false);
+      setSaved(true);
+      clearTimeout(savedTimer.current);
+      savedTimer.current = setTimeout(() => setSaved(false), 4000);
+    } catch (e) {
+      setSaveError(e.message || 'Could not save your changes. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const { report } = await api.uploadTestReport(file);
-      setReports((prev) => [...prev, report]);
-    } catch (err) {
-      setToast(err.message || 'Upload failed.');
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
-    }
+  const discard = () => {
+    setDraft(baseline);
+    setShowErrors(false);
+    setSaveError('');
   };
 
-  const handleDeleteReport = async (reportId) => {
-    setReportActionId(reportId);
-    try {
-      await api.deleteTestReport(reportId);
-      setReports((prev) => prev.filter((r) => r.id !== reportId));
-      setConfirmDeleteId(null);
-    } catch (err) {
-      setToast(err.message || 'Failed to delete report.');
-    } finally {
-      setReportActionId(null);
-    }
-  };
+  if (!user) return null;
 
-  const handleEditReport = async (reportId, file) => {
-    setReportActionId(reportId);
-    try {
-      const { report: updated } = await api.renameTestReport(reportId, file);
-      setReports((prev) => prev.map((r) => (r.id === reportId ? updated : r)));
-    } catch (err) {
-      setToast(err.message || 'Failed to update report.');
-    } finally {
-      setReportActionId(null);
-      if (editFileRef.current) editFileRef.current.value = '';
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className={styles.loadingWrap}>
-        <Spinner size="lg" />
-        <p className={styles.loadingText}>Loading your medical profile...</p>
-      </div>
-    );
-  }
+  const missingHint = meter.missing.length
+    ? `Add: ${meter.missing.slice(0, 3).join(', ')}${meter.missing.length > 3 ? ` and ${meter.missing.length - 3} more` : ''}`
+    : 'Your profile is complete.';
 
   return (
-    <div className={styles.container}>
-      {toast && <ErrorToast message={toast} onClose={() => setToast('')} />}
-      {saveSuccess && (
-        <div className={styles.saveBanner}>
-          ✓ Profile and medical records updated successfully!
+    <div className={styles.page}>
+      <header className={`${styles.card} ${styles.header}`}>
+        <div className={styles.avatar} aria-hidden="true">{initialsOf(user.name)}</div>
+        <div className={styles.headerInfo}>
+          <h1 className={styles.name}>{user.name}</h1>
+          <p className={styles.email}>{user.email}</p>
+          <p className={styles.emailNote}>Your email can&apos;t be changed.</p>
         </div>
-      )}
-
-      {/* Profile Header Banner */}
-      <div className={styles.profileBanner}>
-        <div className={styles.bannerAvatar}>
-          <span className={styles.bannerInitials}>{initials}</span>
-        </div>
-        <div className={styles.bannerInfo}>
-          <h1 className={styles.bannerName}>{name || user?.name || 'Patient User'}</h1>
-          <p className={styles.bannerEmail}>
-            <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
-            </svg>
-            {emailDisplay} <span style={{ opacity: 0.7, fontSize: '0.7rem' }}>(Account Email)</span>
-          </p>
-        </div>
-        <button
-          type="button"
-          className={styles.bannerEditBtn}
-          onClick={() => document.querySelector('[data-name-input]')?.focus()}
-          aria-label="Edit profile"
-        >
-          <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Sticky Profile Action Bar */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '0.25rem' }}>
-        <button onClick={handleSave} disabled={saving} className={styles.primaryBtn} style={{ flex: 1 }}>
-          {saving && <Spinner size="sm" />}
-          {saving ? 'Saving Profile...' : '💾 Save Profile Changes'}
-        </button>
-        <button type="button" onClick={handleLogout} className={styles.btnDangerOutline}>
-          🚪 Log Out
-        </button>
-      </div>
-
-      {/* ── Personal Info Card ── */}
-      <div className={`${styles.card} ${styles.accentTeal}`}>
-        <div className={styles.cardHeader}>
-          <div className={`${styles.cardIconWrap} ${styles.iconWrapTeal}`}>
-            <svg className={styles.cardIcon} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-            </svg>
+        <div className={styles.meter}>
+          <div className={styles.meterTop}>
+            <span className={styles.meterLabel}>Profile completeness</span>
+            <span className={styles.meterValue}>{meter.percent}%</span>
           </div>
-          <h2 className={styles.cardTitle}>Personal Info</h2>
-        </div>
-
-        <div className={styles.fieldGroup}>
-          <label className={styles.fieldLabel}>Full Name</label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full Name" className={styles.input} data-name-input />
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
-          <div className={styles.fieldGroup}>
-            <label className={styles.fieldLabel}>Phone Number</label>
-            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 555-0199" className={styles.input} />
+          <div className={styles.meterTrack} role="progressbar" aria-label="Profile completeness" aria-valuemin={0} aria-valuemax={100} aria-valuenow={meter.percent}>
+            <div className={styles.meterFill} style={{ width: `${meter.percent}%` }} />
           </div>
-          <div className={styles.fieldGroup}>
-            <label className={styles.fieldLabel}>Date of Birth</label>
-            <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className={styles.input} />
-          </div>
+          <p className={styles.meterHint}>{missingHint}</p>
         </div>
+      </header>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
-          <div className={styles.fieldGroup}>
-            <label className={styles.fieldLabel}>Blood Group</label>
-            <select value={bloodType} onChange={(e) => setBloodType(e.target.value)} className={styles.input}>
-              <option value="">Select Blood Group</option>
-              <option value="A+">A Positive (A+)</option>
-              <option value="A-">A Negative (A-)</option>
-              <option value="B+">B Positive (B+)</option>
-              <option value="B-">B Negative (B-)</option>
-              <option value="AB+">AB Positive (AB+)</option>
-              <option value="AB-">AB Negative (AB-)</option>
-              <option value="O+">O Positive (O+)</option>
-              <option value="O-">O Negative (O-)</option>
-            </select>
-          </div>
-          <div className={styles.fieldGroup}>
-            <label className={styles.fieldLabel}>Gender</label>
-            <select value={gender} onChange={(e) => setGender(e.target.value)} className={styles.input}>
-              <option value="">Select Gender</option>
-              <option value="Female">Female</option>
-              <option value="Male">Male</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-        </div>
+      <div className={styles.layout}>
+        <nav className={styles.sideNav} aria-label="Profile sections">
+          {SECTIONS.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={`${styles.navItem} ${active === s.id ? styles.navActive : ''}`}
+              aria-current={active === s.id ? 'true' : undefined}
+              onClick={() => setActive(s.id)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </nav>
 
-        <div className={styles.fieldGroup} style={{ marginTop: '12px' }}>
-          <label className={styles.fieldLabel}>Pregnancy / Nursing Status</label>
-          <select value={pregnancyStatus} onChange={(e) => setPregnancyStatus(e.target.value)} className={styles.input}>
-            <option value="N/A">Not Applicable / N/A</option>
-            <option value="Not Pregnant">Not Pregnant</option>
-            <option value="Pregnant (1st Trimester)">Pregnant (1st Trimester)</option>
-            <option value="Pregnant (2nd Trimester)">Pregnant (2nd Trimester)</option>
-            <option value="Pregnant (3rd Trimester)">Pregnant (3rd Trimester)</option>
-            <option value="Breastfeeding">Breastfeeding / Nursing</option>
-          </select>
-        </div>
+        <div className={styles.content}>
+          <Section id="personal" title="Personal info" active={active === 'personal'}>
+            <div className={styles.grid}>
+              <TextField label="Full name" autoComplete="name" value={draft.name} onChange={(v) => set({ name: v })} maxLength={LIMITS.name} error={err('name')} />
+              <TextField label="Phone" type="tel" inputMode="tel" autoComplete="tel" value={draft.phone} onChange={(v) => set({ phone: v })} placeholder="+1 555 123 4567" error={err('phone')} />
+              <TextField label="Date of birth" type="date" autoComplete="bday" value={draft.dateOfBirth} onChange={(v) => set({ dateOfBirth: v })} min="1900-01-01" max={today} error={err('dateOfBirth')} />
+              <TextField className={styles.spanAll} label="Address" autoComplete="street-address" value={draft.address} onChange={(v) => set({ address: v })} maxLength={LIMITS.address} placeholder="Street, city" error={err('address')} />
+            </div>
+          </Section>
 
-        <div className={styles.fieldGroup} style={{ marginTop: '12px' }}>
-          <label className={styles.fieldLabel}>Home Address</label>
-          <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="123 Main St, City" className={styles.input} />
-        </div>
+          <Section id="medical" title="Medical profile" description="Shared with you in emergencies and used to tailor health guidance." active={active === 'medical'}>
+            <div className={styles.stack}>
+              <div className={styles.grid}>
+                <SelectField label="Blood group" value={draft.bloodGroup} onChange={(v) => set({ bloodGroup: v })} options={BLOOD_GROUPS} placeholder="Not set" />
+                <SelectField label="Gender" value={draft.gender} onChange={(v) => set({ gender: v })} options={GENDERS} placeholder="Not set" />
+                {draft.gender === 'Female' && (
+                  <SelectField label="Pregnancy status" value={draft.pregnancyStatus} onChange={(v) => set({ pregnancyStatus: v || 'N/A' })} options={PREGNANCY_OPTIONS} placeholder="N/A" />
+                )}
+                <TextField label="Height" suffix="cm" inputMode="decimal" autoComplete="off" value={draft.height} onChange={(v) => set({ height: v })} placeholder="170" error={err('height')} />
+                <TextField label="Weight" suffix="kg" inputMode="decimal" autoComplete="off" value={draft.weight} onChange={(v) => set({ weight: v })} placeholder="65" error={err('weight')} />
+              </div>
+              <TagInput label="Allergies" items={draft.allergies} onChange={(v) => set({ allergies: v })} placeholder="e.g. Penicillin" hint="Press Enter or Add after each one." />
+              <TagInput label="Existing conditions" items={draft.preExistingConditions} onChange={(v) => set({ preExistingConditions: v })} placeholder="e.g. Asthma" />
+              <MedicationsEditor rows={draft.currentMedications} onChange={(v) => set({ currentMedications: v })} error={err('currentMedications')} />
+              <TreatmentsEditor rows={draft.longTermTreatments} onChange={(v) => set({ longTermTreatments: v })} error={err('longTermTreatments')} />
+              <TextField
+                as="textarea"
+                rows={4}
+                label="Notes"
+                value={draft.notes}
+                onChange={(v) => set({ notes: v })}
+                maxLength={LIMITS.notes}
+                placeholder="Anything else a doctor should know"
+                hint={`${draft.notes.length}/${LIMITS.notes}`}
+                error={err('notes')}
+              />
+            </div>
+          </Section>
 
-        <div className={styles.fieldGroup} style={{ marginTop: '12px' }}>
-          <label className={styles.fieldLabel}>Emergency Contact</label>
-          <div className={styles.emergencyGrid} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-            <input type="text" placeholder="Name" value={emergencyContact.name || ''} onChange={(e) => setEmergencyContact({ ...emergencyContact, name: e.target.value })} className={styles.input} />
-            <input type="text" placeholder="Relationship" value={emergencyContact.relationship || ''} onChange={(e) => setEmergencyContact({ ...emergencyContact, relationship: e.target.value })} className={styles.input} />
-            <input type="tel" placeholder="Phone" value={emergencyContact.phone || ''} onChange={(e) => setEmergencyContact({ ...emergencyContact, phone: e.target.value })} className={styles.input} />
-          </div>
-        </div>
+          <Section id="emergency" title="Emergency contact" description="Someone we can show first when you need urgent help." active={active === 'emergency'}>
+            <div className={styles.grid}>
+              <TextField label="Contact name" autoComplete="off" value={draft.ecName} onChange={(v) => set({ ecName: v })} maxLength={LIMITS.name} error={err('ecName')} />
+              <TextField label="Relationship" autoComplete="off" value={draft.ecRelationship} onChange={(v) => set({ ecRelationship: v })} maxLength={LIMITS.relationship} placeholder="e.g. Sister" error={err('ecRelationship')} />
+              <TextField label="Contact phone" type="tel" inputMode="tel" autoComplete="off" value={draft.ecPhone} onChange={(v) => set({ ecPhone: v })} error={err('ecPhone')} />
+            </div>
+          </Section>
 
-        <button onClick={handleSave} disabled={saving} className={styles.primaryBtn} style={{ marginTop: '1rem' }}>
-          {saving && <Spinner size="sm" />}
-          {saving ? 'Saving Changes...' : '💾 Save Personal Info Changes'}
-        </button>
-      </div>
+          <Section id="reports" title="Test reports" description="PDF, PNG, JPG or WEBP, up to 2 MB each." active={active === 'reports'}>
+            <ReportsSection />
+          </Section>
 
-      {/* ── Ongoing Medication Card ── */}
-      <div className={`${styles.card} ${styles.accentEmerald}`}>
-        <div className={styles.cardHeader}>
-          <div className={`${styles.cardIconWrap} ${styles.iconWrapEmerald}`}>
-            <svg className={styles.cardIcon} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
-            </svg>
-          </div>
-          <h2 className={styles.cardTitle}>Ongoing Medication</h2>
-        </div>
-        <TagInput tags={medications} onChange={setMedications} placeholder="e.g. Metformin 500mg, Lisinopril 10mg" />
+          <Section id="account" title="Account & security" active={active === 'account'}>
+            <AccountSection />
+          </Section>
 
-        <button onClick={handleSave} disabled={saving} className={styles.primaryBtn} style={{ marginTop: '1rem' }}>
-          {saving && <Spinner size="sm" />}
-          {saving ? 'Saving Changes...' : '💾 Save Medication Changes'}
-        </button>
-      </div>
-
-      {/* ── Past Conditions Card ── */}
-      <div className={`${styles.card} ${styles.accentAmber}`}>
-        <div className={styles.cardHeader}>
-          <div className={`${styles.cardIconWrap} ${styles.iconWrapAmber}`}>
-            <svg className={styles.cardIcon} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-            </svg>
-          </div>
-          <h2 className={styles.cardTitle}>Past Conditions</h2>
-        </div>
-        <TagInput tags={conditions} onChange={setConditions} placeholder="e.g. Asthma, Diabetes, Past Appendectomy" />
-
-        <div className={styles.fieldGroup} style={{ marginTop: '1rem' }}>
-          <label className={styles.fieldLabel}>Known Allergies & Drug Sensitivities</label>
-          <TagInput tags={allergies} onChange={setAllergies} placeholder="e.g. Penicillin, Peanuts, Latex" />
-        </div>
-
-        <button onClick={handleSave} disabled={saving} className={styles.primaryBtn} style={{ marginTop: '1rem' }}>
-          {saving && <Spinner size="sm" />}
-          {saving ? 'Saving Changes...' : '💾 Save Conditions Changes'}
-        </button>
-      </div>
-
-      {/* ── Notes Card ── */}
-      <div className={`${styles.card} ${styles.accentViolet} ${styles.fullWidth}`}>
-        <div className={styles.cardHeader}>
-          <div className={`${styles.cardIconWrap} ${styles.iconWrapViolet}`}>
-            <svg className={styles.cardIcon} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
-            </svg>
-          </div>
-          <h2 className={styles.cardTitle}>Notes</h2>
-        </div>
-        <div className={styles.fieldGroup}>
-          <label className={styles.fieldLabel}>Overall Health Notes</label>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Additional medical notes for AI triage evaluation..." className={styles.textarea} />
-        </div>
-        <button onClick={handleSave} disabled={saving} className={styles.primaryBtn}>
-          {saving && <Spinner size="sm" />}
-          {saving ? 'Saving Profile...' : 'Save Profile & Health History'}
-        </button>
-      </div>
-
-      {/* ── Test Reports Card ── */}
-      <div className={`${styles.card} ${styles.accentSky} ${styles.fullWidth}`}>
-        <div className={styles.cardHeader}>
-          <div className={`${styles.cardIconWrap} ${styles.iconWrapSky}`}>
-            <svg className={styles.cardIcon} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-            </svg>
-          </div>
-          <h2 className={styles.cardTitle}>Test Reports</h2>
-        </div>
-
-        <label className={styles.uploadZone}>
-          <svg className={styles.uploadZoneIcon} fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-          </svg>
-          <span className={styles.uploadZoneText}>{uploading ? 'Uploading...' : 'Click to upload a report'}</span>
-          <span className={styles.uploadZoneHint}>PDF, PNG, JPG, DOC up to 10MB</span>
-          <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" onChange={handleUpload} className={styles.hiddenInput} disabled={uploading} />
-          <input ref={editFileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" className={styles.hiddenInput} onChange={(e) => { const f = e.target.files?.[0]; if (f && editingIdRef.current) handleEditReport(editingIdRef.current, f); }} />
-        </label>
-
-        {reports.length === 0 ? (
-          <p className={styles.emptyReports}>No medical reports uploaded yet.</p>
-        ) : (
-          <ul className={styles.reportList}>
-            {reports.map((report) => (
-              <li key={report.id} className={styles.reportItem}>
-                <div className={styles.reportInfo}>
-                  <svg className={styles.reportFileIcon} fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-                  </svg>
-                  <div>
-                    <p className={styles.reportFilename}>{report.filename}</p>
-                    <p className={styles.reportDate}>{report.uploadedAt ? new Date(report.uploadedAt).toLocaleDateString() : ''}</p>
-                  </div>
+          {(dirty || saved) && (
+            <div className={styles.saveSpacer} aria-hidden="true" />
+          )}
+          {(dirty || saved) && (
+            <div className={styles.saveBar} role="region" aria-label="Unsaved changes">
+              <p className={`${styles.saveMsg} ${saveError ? styles.saveMsgError : ''} ${saved ? styles.saveMsgOk : ''}`} role={saveError ? 'alert' : 'status'}>
+                {saveError || (saved ? 'Changes saved.' : 'You have unsaved changes.')}
+              </p>
+              {dirty && (
+                <div className={styles.saveActions}>
+                  <button type="button" className={styles.discardBtn} onClick={discard} disabled={saving}>Discard</button>
+                  <button type="button" className={styles.saveBtn} onClick={save} disabled={saving}>
+                    {saving ? <><Spinner size="sm" /> Saving…</> : 'Save changes'}
+                  </button>
                 </div>
-                <div className={styles.reportActions}>
-                  {reportActionId === report.id ? (
-                    <Spinner size="sm" />
-                  ) : confirmDeleteId === report.id ? (
-                    <div className={styles.confirmDelete}>
-                      <span className={styles.confirmText}>Delete?</span>
-                      <button type="button" className={styles.confirmYes} onClick={() => handleDeleteReport(report.id)}>Yes</button>
-                      <button type="button" className={styles.confirmNo} onClick={() => setConfirmDeleteId(null)}>No</button>
-                    </div>
-                  ) : (
-                    <>
-                      <button type="button" className={styles.reportViewBtn} onClick={() => setToast(`Preview of "${report.filename}" loaded`)}>View</button>
-                      <button type="button" className={styles.reportEditBtn} aria-label="Replace file" onClick={() => { editingIdRef.current = report.id; setReportActionId(report.id); editFileRef.current?.click(); }}>Edit</button>
-                      <button type="button" className={styles.reportDeleteBtn} aria-label="Delete report" onClick={() => setConfirmDeleteId(report.id)}>Delete</button>
-                    </>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* ── Account Settings & Log Out Card ── */}
-      <div className={`${styles.card} ${styles.fullWidth}`} style={{ borderLeft: '4px solid #EF4444' }}>
-        <div className={styles.cardHeader}>
-          <div className={styles.cardIconWrap} style={{ background: '#FEE2E2', color: '#DC2626' }}>
-            <svg className={styles.cardIcon} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
-            </svg>
-          </div>
-          <h2 className={styles.cardTitle}>Account & Session</h2>
+              )}
+            </div>
+          )}
         </div>
-
-        <p style={{ fontSize: '0.8125rem', color: '#64748B', margin: '0 0 1rem 0' }}>
-          Signed in as <strong>{emailDisplay}</strong>. Log out to end your session or switch accounts.
-        </p>
-
-        <button type="button" onClick={handleLogout} className={styles.btnLogoutFull}>
-          🚪 Log Out of MediGuide
-        </button>
       </div>
     </div>
   );
 }
-
-export default PatientProfile;
