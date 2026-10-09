@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { NavLink, Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
@@ -27,7 +27,7 @@ const SIDEBAR_ITEMS = [
   { to: '/patient/triage?new=true', label: 'Consult', icon: 'consult' },
   { to: '/patient/slots', label: 'Doctor Sessions', icon: 'sessions' },
   { to: '/patient/appointments', label: 'My Appointments', icon: 'appointments' },
-  { to: '/patient/profile', label: 'Medical Profile', icon: 'profile' }
+  { to: '/patient/profile', label: 'Profile & Settings', icon: 'profile' }
 ];
 
 const TAB_LEFT = [
@@ -43,6 +43,32 @@ function PatientLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const headerRef = useRef(null);
+  const tabBarRef = useRef(null);
+
+  // Publish the real rendered heights of the mobile top bar and tab bar as CSS variables
+  // (--app-header-h / --app-tabbar-h). Full-height screens such as the chat use them, so
+  // safe areas, notches and large system fonts never make content slide underneath.
+  useEffect(() => {
+    const root = document.documentElement;
+    const measure = () => {
+      const header = headerRef.current;
+      const tabBar = tabBarRef.current;
+      root.style.setProperty('--app-header-h', `${header ? header.offsetHeight : 0}px`);
+      root.style.setProperty('--app-tabbar-h', `${tabBar ? tabBar.offsetHeight : 0}px`);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (headerRef.current) observer.observe(headerRef.current);
+    if (tabBarRef.current) observer.observe(tabBarRef.current);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+      root.style.removeProperty('--app-header-h');
+      root.style.removeProperty('--app-tabbar-h');
+    };
+  }, []);
 
   // Hardware back button on native Android/iOS
   useEffect(() => {
@@ -116,7 +142,7 @@ function PatientLayout() {
       </aside>
 
       <div className={styles.mainContentWrapper}>
-        <header className={styles.mobileHeader}>
+        <header ref={headerRef} className={styles.mobileHeader}>
           <Link to="/patient/home" className={styles.mobileBrandLink}>
             <img src="/logo.jpg" alt="" className={styles.mobileLogo} />
             <span className={styles.mobileBrandName}>MediGuide</span>
@@ -137,7 +163,7 @@ function PatientLayout() {
         </main>
       </div>
 
-      <nav className={styles.bottomTabBar} aria-label="Primary">
+      <nav ref={tabBarRef} className={styles.bottomTabBar} aria-label="Primary">
         <div className={styles.tabInner}>
           {TAB_LEFT.map((t) => (
             <NavLink key={t.label} to={t.to} className={({ isActive }) => `${styles.tabItem} ${isActive ? styles.activeTab : ''}`}>

@@ -161,10 +161,10 @@ function DocumentsSection({ org, onChange }) {
     }
   };
 
-  const view = async (id) => {
+  const view = async (id, filename) => {
     setBusyId(id);
     setError('');
-    try { await openFile(id); } catch (err) { setError(err.message); } finally { setBusyId(null); }
+    try { await openFile(id, filename); } catch (err) { setError(err.message); } finally { setBusyId(null); }
   };
 
   const remove = async (id) => {
@@ -208,7 +208,7 @@ function DocumentsSection({ org, onChange }) {
                   </div>
                 ) : (
                   <div className={styles.itemActions}>
-                    <button type="button" className={styles.btnLink} disabled={busyId === id} onClick={() => view(id)}>View</button>
+                    <button type="button" className={styles.btnLink} disabled={busyId === id} onClick={() => view(id, d.filename)}>View</button>
                     <button type="button" className={styles.btnLink} onClick={() => setConfirmId(id)} aria-label={`Delete ${d.filename}`}>Delete</button>
                   </div>
                 )}

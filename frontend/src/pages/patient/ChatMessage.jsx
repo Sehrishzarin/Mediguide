@@ -48,9 +48,13 @@ function ChatMessage({ message, isLatestAi, canAsk, onPickQuestion }) {
   const r = message.result;
   const urgency = r && !r.is_non_medical ? URGENCY[r.urgency_level] : null;
   const specialty = r && !r.is_non_medical ? r.specialty : '';
-  const isEmergencySpecialty = /emergency/i.test(specialty || '');
-  const recommendsVisit = r && !r.is_non_medical && specialty && !isEmergencySpecialty &&
-    (r.show_map || r.urgency_level === 'high' || r.urgency_level === 'medium' || /visit|clinic|hospital|doctor|consult/i.test(r.hospital_recommendation || ''));
+  // Only real doctor specialties get a booking button (not "Emergency Department" or "Self-Care Monitoring")
+  const bookable = Boolean(specialty) && !/emergency|self|monitor|counsel|none|n\/a/i.test(specialty);
+  const reco = r?.hospital_recommendation || '';
+  const advisesHome = /no (hospital |clinic )?visit|not need/i.test(reco);
+  const optionalVisit = /optional|home care/i.test(reco);
+  const recommendsVisit = r && !r.is_non_medical && bookable && !advisesHome &&
+    (r.show_map || r.urgency_level === 'high' || r.urgency_level === 'medium' || /visit|clinic|hospital|doctor|consult/i.test(reco));
 
   return (
     <div data-row className={`${styles.msgRow} ${isUser ? styles.msgRowUser : ''}`}>
@@ -89,8 +93,8 @@ function ChatMessage({ message, isLatestAi, canAsk, onPickQuestion }) {
         {!isUser && recommendsVisit && (
           <div className={styles.ctaRow}>
             {r.hospital_recommendation && <p className={styles.recoText}>{r.hospital_recommendation}</p>}
-            <Link to="/patient/slots" state={{ specialty }} className={styles.bookBtn}>
-              Find a {specialty} session
+            <Link to="/patient/slots" state={{ specialty }} className={optionalVisit ? styles.bookBtnSoft : styles.bookBtn}>
+              {optionalVisit ? `Prefer to see a doctor? Book a ${specialty}` : `Find a ${specialty} session`}
             </Link>
           </div>
         )}

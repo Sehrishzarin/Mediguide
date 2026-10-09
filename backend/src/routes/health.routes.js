@@ -1,13 +1,19 @@
 const express = require('express');
+const mongoose = require('mongoose');
+
 const router = express.Router();
 
+const DB_STATES = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+
 // @route   GET /api/health
-// @desc    Check API health status
+// @desc    API + database status (503 when the database is not connected)
 // @access  Public
 router.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'success',
-    message: 'Backend server is running smoothly',
+  const database = DB_STATES[mongoose.connection.readyState] || 'unknown';
+  const ok = database === 'connected';
+  res.status(ok ? 200 : 503).json({
+    status: ok ? 'success' : 'degraded',
+    database,
     timestamp: new Date().toISOString()
   });
 });

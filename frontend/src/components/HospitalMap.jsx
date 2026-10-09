@@ -168,8 +168,8 @@ const FacilityCard = memo(function FacilityCard({ org, selected, onSelect, onBoo
   }, [selected]);
 
   const rating = org.isPartner
-    ? (org.totalReviews > 0 ? { value: org.averageRating, count: org.totalReviews, label: 'reviews' } : null)
-    : (org.publicRating > 0 ? { value: org.publicRating, count: org.publicReviewsCount, label: 'public ratings' } : null);
+    ? (org.totalReviews > 0 ? { value: org.averageRating, count: org.totalReviews, label: org.totalReviews === 1 ? 'review' : 'reviews' } : null)
+    : (org.publicRating > 0 ? { value: org.publicRating, count: org.publicReviewsCount, label: org.publicReviewsCount === 1 ? 'public rating' : 'public ratings' } : null);
 
   return (
     <article

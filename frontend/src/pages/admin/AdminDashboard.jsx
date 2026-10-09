@@ -16,10 +16,10 @@ function PendingCard({ org, onReview }) {
   const [viewingId, setViewingId] = useState(null);
   const [docError, setDocError] = useState('');
 
-  const view = async (id) => {
+  const view = async (id, filename) => {
     setViewingId(id);
     setDocError('');
-    try { await openFile(id); } catch (err) { setDocError(err.message); } finally { setViewingId(null); }
+    try { await openFile(id, filename); } catch (err) { setDocError(err.message); } finally { setViewingId(null); }
   };
 
   const docs = org.documents || [];
@@ -55,7 +55,7 @@ function PendingCard({ org, onReview }) {
               return (
                 <li key={id} className={styles.docItem}>
                   <span className={styles.docName}>{d.filename} <span className={styles.docMeta}>{formatSize(d.size)}</span></span>
-                  <button type="button" className={styles.btnLink} disabled={viewingId === id} onClick={() => view(id)}>
+                  <button type="button" className={styles.btnLink} disabled={viewingId === id} onClick={() => view(id, d.filename)}>
                     {viewingId === id ? <Spinner size="sm" /> : 'View'}
                   </button>
                 </li>

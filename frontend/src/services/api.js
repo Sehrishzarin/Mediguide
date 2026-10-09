@@ -132,13 +132,26 @@ export const uploadFile = (file, { kind = 'report', organizationId } = {}) => {
   return request('/files', { method: 'POST', form });
 };
 export const deleteFile = (id) => request(`/files/${id}`, { method: 'DELETE' });
-// Opens a stored file in a new tab (auth header means we cannot link to it directly)
-export const openFile = async (id) => {
-  const response = await request(`/files/${id}/download`, { raw: true });
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  window.open(url, '_blank', 'noopener');
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+// Opens a stored file in a new tab. The tab is opened synchronously (inside the click)
+// so popup blockers allow it; if it is blocked anyway we fall back to a download.
+export const openFile = async (id, filename = 'document') => {
+  const tab = window.open('', '_blank');
+  try {
+    const response = await request(`/files/${id}/download`, { raw: true });
+    const url = URL.createObjectURL(await response.blob());
+    if (tab) {
+      tab.location.href = url;
+    } else {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (err) {
+    if (tab) tab.close();
+    throw err;
+  }
 };
 
 // ---------- AI triage ----------

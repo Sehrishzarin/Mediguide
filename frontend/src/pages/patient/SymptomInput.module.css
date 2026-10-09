@@ -367,6 +367,21 @@
   text-align: center;
 }
 
+.bookBtnSoft {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 6px 16px;
+  border-radius: 12px;
+  border: 1.5px solid var(--color-primary);
+  background: #fff;
+  color: #0f766e;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-align: center;
+}
+
 .suggestChip {
   display: block;
   margin-top: 10px;
@@ -535,7 +550,8 @@
     top: var(--app-header-h, 58px);
     left: 0;
     right: 0;
-    bottom: calc(var(--app-tabbar-h, 64px) + max(env(safe-area-inset-bottom, 0px), 4px));
+    /* measured by PatientLayout; already includes the bottom safe area */
+    bottom: var(--app-tabbar-h, calc(64px + env(safe-area-inset-bottom, 0px)));
     height: auto;
     min-height: 0;
     max-width: none;

@@ -163,9 +163,50 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
     };
   }
 
-  // 5. Routine / Mild Symptoms — REASSURING + WARNING INSTRUCTIONS
+  // 5. Specialty routing, with severity escalating to a clinic visit
   const allergies = (profile.allergies || []).join(' ').toLowerCase();
+  const isSevere = /\b(severe|severely|worst|unbearable|intense|persistent|won'?t stop|for (a )?week|blood|bloody|vomiting|high fever)\b/i.test(lower);
+  const specialtyRoutes = [
+    { test: /\b(rash|itch\w*|skin|acne|eczema|hives|mole)\b/, specialty: 'Dermatologist', category: 'Skin symptom' },
+    { test: /\b(stomach\w*|abdomen|abdominal|vomit\w*|diarrh\w*|nausea|constipat\w*|acid|heartburn)\b/, specialty: 'Gastroenterologist', category: 'Digestive symptom' },
+    { test: /\b(joint|knee|back ?pain|backache|sprain\w*|fracture|bone|shoulder)\b/, specialty: 'Orthopedist', category: 'Muscle / joint symptom' }
+  ];
+  const route = specialtyRoutes.find((r) => r.test.test(lower));
 
+  if (route || isSevere) {
+    const specialty = route ? route.specialty : 'General Physician';
+    const profileNote = `Profile check: ${allergies ? `Allergies: ${allergies}.` : 'No drug allergies reported.'}${isPregnant ? ` Pregnancy (${profile.pregnancyStatus}).` : ''}`;
+    if (isSevere || isPregnant) {
+      return {
+        is_non_medical: false,
+        category: route ? route.category : 'Significant symptom',
+        specialty,
+        urgency_level: 'medium',
+        hospital_recommendation: 'CLINIC VISIT RECOMMENDED',
+        show_map: true,
+        profile_impact_summary: profileNote,
+        conversational_response: `🩺 **Clinic Visit Recommended**\n\nWhat you describe sounds more than mild, so please see a **${specialty}** within the next day rather than waiting it out at home.\n\n**Go to an emergency department now** if you notice vomiting blood, black stools, fainting, severe dehydration, or pain that becomes unbearable.`,
+        trigger_question: 'On a scale of 1-10, how bad is it right now, and when did it start?',
+        precautionary_advice: 'Stay hydrated, avoid self-medicating beyond basic pain relief, and arrange a doctor visit soon.',
+        emergency_flag: false
+      };
+    }
+    return {
+      is_non_medical: false,
+      category: route.category,
+      specialty,
+      urgency_level: 'low',
+      hospital_recommendation: 'HOME CARE FIRST (Clinic Visit Optional)',
+      show_map: false,
+      profile_impact_summary: profileNote,
+      conversational_response: `😊 **Home Care First**\n\nThis sounds mild for now. Rest, stay hydrated and watch how it develops over the next day or two.\n\nIf it lasts more than a few days or gets worse, book a **${specialty}**. Seek urgent care for spreading swelling, high fever, or severe pain.`,
+      trigger_question: 'How long have you had this, and is it getting better or worse?',
+      precautionary_advice: 'Rest, stay hydrated and monitor your symptoms.',
+      emergency_flag: false
+    };
+  }
+
+  // 6. Routine / Mild Symptoms — REASSURING + WARNING INSTRUCTIONS
   if (
     lower.includes('headache') || lower.includes('tired') || lower.includes('fatigue') ||
     lower.includes('cough') || lower.includes('rash') || lower.includes('itch') || lower.includes('stomach')

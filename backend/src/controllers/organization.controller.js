@@ -2,7 +2,7 @@ const Organization = require('../models/Organization');
 const Slot = require('../models/Slot');
 const File = require('../models/File');
 const { asyncHandler, HttpError } = require('../middlewares/error');
-const { generateSlotsForDoctor } = require('../utils/slots');
+const { generateSlotsForDoctor, isoDate } = require('../utils/slots');
 
 const ORG_TYPES = Organization.schema.path('type').enumValues;
 
@@ -196,7 +196,7 @@ exports.removeStaff = asyncHandler(async (req, res) => {
   const org = await ownOrgOrFail(req);
   const member = org.staff.id(req.params.staffId);
   if (!member) throw new HttpError(404, 'Staff member not found.');
-  const today = new Date().toISOString().split('T')[0];
+  const today = isoDate(new Date());
   // Only remove sessions nobody booked yet
   await Slot.deleteMany({ organization: org._id, doctor: member.name, patient: null, date: { $gte: today } });
   member.deleteOne();

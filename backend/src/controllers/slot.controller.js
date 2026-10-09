@@ -1,6 +1,6 @@
 const Slot = require('../models/Slot');
 const { asyncHandler, HttpError } = require('../middlewares/error');
-const { isoDate } = require('../utils/slots');
+const { upcomingFilter } = require('../utils/slots');
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -19,7 +19,7 @@ const toClient = (s) => ({
 // Upcoming, still-available sessions.
 exports.getAvailableSlots = asyncHandler(async (req, res) => {
   const { specialty, organizationId, search } = req.query;
-  const query = { patient: null, date: { $gte: isoDate(new Date()) } };
+  const query = { patient: null, $and: [upcomingFilter()] };
 
   if (organizationId) query.organization = organizationId;
   if (specialty) query.specialty = { $regex: escapeRegex(String(specialty)), $options: 'i' };
@@ -36,7 +36,7 @@ exports.getAvailableSlots = asyncHandler(async (req, res) => {
 // Atomic: only succeeds if nobody else has taken the session.
 exports.bookSlot = asyncHandler(async (req, res) => {
   const slot = await Slot.findOneAndUpdate(
-    { _id: req.params.id, patient: null, date: { $gte: isoDate(new Date()) } },
+    { _id: req.params.id, patient: null, ...upcomingFilter() },
     { $set: { patient: req.user.id, bookedAt: new Date() } },
     { new: true }
   );

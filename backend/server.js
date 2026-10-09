@@ -34,7 +34,9 @@ const allowedOrigins = [
   'http://localhost', 'https://localhost', 'capacitor://localhost',
   'http://localhost:5173', 'http://127.0.0.1:5173'
 ];
-const isLanDev = (origin) => process.env.NODE_ENV !== 'production' && /^http:\/\/(\d{1,3}\.){3}\d{1,3}:\d+$/.test(origin);
+// In development allow any localhost / LAN-IP port (Vite moves to 5174+ when 5173 is busy)
+const isLanDev = (origin) => process.env.NODE_ENV !== 'production' &&
+  /^http:\/\/(localhost|(\d{1,3}\.){3}\d{1,3}):\d+$/.test(origin);
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({
