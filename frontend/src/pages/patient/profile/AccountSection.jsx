@@ -1,9 +1,19 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { LogOut, KeyRound, Trash2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
-import Spinner from '../../../components/Spinner';
-import { TextField } from './FormKit';
+import { Alert, Button, Field, PasswordInput } from '../../../components/ui';
+import friendlyError from '../../../utils/friendlyError';
 import styles from '../PatientProfile.module.css';
+
+function PasswordField({ label, value, onChange, autoComplete, hint }) {
+  const id = useId();
+  return (
+    <Field label={label} htmlFor={id} hint={hint}>
+      <PasswordInput id={id} value={value} onChange={(e) => onChange(e.target.value)} autoComplete={autoComplete} />
+    </Field>
+  );
+}
 
 function ChangePassword() {
   const { changePassword } = useAuth();
@@ -18,9 +28,9 @@ function ChangePassword() {
     e.preventDefault();
     setOk(false);
     if (!current) return setError('Enter your current password.');
-    if (next.length < 8) return setError('New password must be at least 8 characters.');
-    if (next !== confirm) return setError('New password and confirmation do not match.');
-    if (next === current) return setError('New password must be different from the current one.');
+    if (next.length < 8) return setError('Your new password needs at least 8 characters.');
+    if (next !== confirm) return setError('The new passwords do not match.');
+    if (next === current) return setError('Choose a password that is different from your current one.');
     setBusy(true);
     setError('');
     try {
@@ -28,26 +38,34 @@ function ChangePassword() {
       setCurrent(''); setNext(''); setConfirm('');
       setOk(true);
     } catch (err) {
-      setError(err.message || 'Could not change your password.');
+      setError(friendlyError(err, 'We could not change your password. Please try again.'));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <form onSubmit={submit} className={styles.subCard} noValidate>
-      <h3 className={styles.subTitle}>Change password</h3>
-      <input type="text" name="username" autoComplete="username" className={styles.hiddenInput} tabIndex={-1} aria-hidden="true" readOnly />
-      <TextField label="Current password" type="password" autoComplete="current-password" value={current} onChange={setCurrent} />
-      <TextField label="New password" type="password" autoComplete="new-password" value={next} onChange={setNext} hint="At least 8 characters." />
-      <TextField label="Confirm new password" type="password" autoComplete="new-password" value={confirm} onChange={setConfirm} />
-      <div aria-live="polite">
-        {error && <p className={styles.inlineError} role="alert">{error}</p>}
-        {ok && <p className={styles.inlineOk} role="status">Password updated.</p>}
+    <form onSubmit={submit} className={styles.block} noValidate>
+      <div className={styles.blockHead}>
+        <span className={styles.blockIcon} aria-hidden="true"><KeyRound size={18} /></span>
+        <div>
+          <h3 className={styles.blockTitle}>Change password</h3>
+          <p className={styles.blockText}>Use at least 8 characters.</p>
+        </div>
       </div>
-      <button type="submit" className={styles.secondaryBtn} disabled={busy}>
-        {busy ? <><Spinner size="sm" /> Updating…</> : 'Update password'}
-      </button>
+      <input type="text" name="username" autoComplete="username" className="sr-only" tabIndex={-1} aria-hidden="true" readOnly />
+      <div className={styles.stackSm}>
+        <PasswordField label="Current password" autoComplete="current-password" value={current} onChange={setCurrent} />
+        <PasswordField label="New password" autoComplete="new-password" value={next} onChange={setNext} />
+        <PasswordField label="Confirm new password" autoComplete="new-password" value={confirm} onChange={setConfirm} />
+      </div>
+      <div aria-live="polite">
+        {error && <Alert tone="danger" icon={AlertCircle}>{error}</Alert>}
+        {ok && <Alert tone="success" icon={CheckCircle2}>Password updated.</Alert>}
+      </div>
+      <div>
+        <Button type="submit" variant="secondary" loading={busy}>{busy ? 'Updating' : 'Update password'}</Button>
+      </div>
     </form>
   );
 }
@@ -69,29 +87,36 @@ function DeleteAccount() {
       await deleteAccount(password);
       navigate('/', { replace: true });
     } catch (err) {
-      setError(err.message || 'Could not delete your account.');
+      setError(friendlyError(err, 'We could not delete your account. Please try again.'));
       setBusy(false);
     }
   };
 
+  const cancel = () => { setOpen(false); setPassword(''); setError(''); };
+
   return (
-    <div className={`${styles.subCard} ${styles.danger}`}>
-      <h3 className={`${styles.subTitle} ${styles.dangerTitle}`}>Delete account</h3>
-      <p className={styles.dangerText}>
-        This permanently removes your profile, medical details and uploaded reports, and releases any sessions you booked. It cannot be undone.
-      </p>
+    <div className={`${styles.block} ${styles.dangerZone}`}>
+      <div className={styles.blockHead}>
+        <span className={`${styles.blockIcon} ${styles.blockIconDanger}`} aria-hidden="true"><Trash2 size={18} /></span>
+        <div>
+          <h3 className={styles.blockTitle}>Delete account</h3>
+          <p className={styles.blockText}>
+            Permanently removes your profile, medical details and uploaded reports, and releases any sessions you booked. This cannot be undone.
+          </p>
+        </div>
+      </div>
       {!open ? (
-        <button type="button" className={styles.dangerOutline} onClick={() => setOpen(true)}>Delete my account…</button>
+        <div>
+          <Button variant="dangerSoft" onClick={() => setOpen(true)}>Delete my account</Button>
+        </div>
       ) : (
-        <form onSubmit={submit} className={styles.stack} noValidate>
-          <input type="text" name="username" autoComplete="username" className={styles.hiddenInput} tabIndex={-1} aria-hidden="true" readOnly />
-          <TextField label="Type your password to confirm" type="password" autoComplete="current-password" value={password} onChange={setPassword} />
-          <div aria-live="polite">{error && <p className={styles.inlineError} role="alert">{error}</p>}</div>
+        <form onSubmit={submit} className={styles.stackSm} noValidate>
+          <input type="text" name="username" autoComplete="username" className="sr-only" tabIndex={-1} aria-hidden="true" readOnly />
+          <PasswordField label="Type your password to confirm" autoComplete="current-password" value={password} onChange={setPassword} />
+          <div aria-live="polite">{error && <Alert tone="danger" icon={AlertCircle}>{error}</Alert>}</div>
           <div className={styles.rowBtns}>
-            <button type="button" className={styles.secondaryBtn} onClick={() => { setOpen(false); setPassword(''); setError(''); }} disabled={busy}>Cancel</button>
-            <button type="submit" className={styles.dangerSolid} disabled={busy}>
-              {busy ? <><Spinner size="sm" /> Deleting…</> : 'Delete permanently'}
-            </button>
+            <Button variant="secondary" onClick={cancel} disabled={busy}>Cancel</Button>
+            <Button type="submit" variant="danger" loading={busy}>{busy ? 'Deleting' : 'Delete permanently'}</Button>
           </div>
         </form>
       )}
@@ -99,21 +124,21 @@ function DeleteAccount() {
   );
 }
 
-export default function AccountSection() {
-  const { logout } = useAuth();
-  const navigate = useNavigate();
-
-  const signOut = () => {
-    logout();
-    navigate('/login', { replace: true });
-  };
-
+export default function AccountSection({ onLogout }) {
+  const { user } = useAuth();
   return (
     <div className={styles.stack}>
-      <div className={styles.subCard}>
-        <h3 className={styles.subTitle}>Sign out</h3>
-        <p className={styles.mutedText}>Sign out of MediGuide on this device.</p>
-        <button type="button" className={styles.secondaryBtn} onClick={signOut}>Log out</button>
+      <div className={styles.block}>
+        <div className={styles.blockHead}>
+          <span className={styles.blockIcon} aria-hidden="true"><LogOut size={18} /></span>
+          <div>
+            <h3 className={styles.blockTitle}>Log out</h3>
+            <p className={styles.blockText}>You are signed in as {user?.email}.</p>
+          </div>
+        </div>
+        <div>
+          <Button variant="secondary" icon={LogOut} onClick={onLogout}>Log out</Button>
+        </div>
       </div>
       <ChangePassword />
       <DeleteAccount />

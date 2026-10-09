@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
+import { ArrowLeft, MessageCircle, CalendarCheck, ShieldCheck, AlertCircle } from 'lucide-react';
 import { useAuth, homeForRole } from '../../context/AuthContext';
+import { Button, Field, Input, PasswordInput, Segmented, Alert, Logo } from '../../components/ui';
+import Nura from '../../components/nura/Nura';
+import friendlyError from '../../utils/friendlyError';
 import styles from './AuthPage.module.css';
 
 // Handy for hackathon judges; set VITE_SHOW_DEMO_LOGINS=false to hide in a real deployment
@@ -11,26 +16,33 @@ const DEMO_ACCOUNTS = [
   { label: 'Admin', email: 'admin@mediguide.com', password: 'adminpassword123' }
 ];
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+// The native app has no landing page, so there is nothing to go "back" to
+const IS_NATIVE = Capacitor.isNativePlatform();
 
-function PasswordInput({ value, onChange, placeholder, autoComplete, id }) {
-  const [visible, setVisible] = useState(false);
-  return (
-    <div className={styles.passwordWrap}>
-      <input
-        id={id}
-        type={visible ? 'text' : 'password'}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        autoComplete={autoComplete}
-        className={styles.input}
-      />
-      <button type="button" className={styles.showBtn} onClick={() => setVisible((v) => !v)} aria-label={visible ? 'Hide password' : 'Show password'}>
-        {visible ? 'Hide' : 'Show'}
-      </button>
-    </div>
-  );
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const PHONE_RE = /^[\d\s+\-()]{7,20}$/;
+
+const ROLE_OPTIONS = [
+  { value: 'user', label: 'Patient' },
+  { value: 'organization', label: 'Healthcare organization' }
+];
+
+const BENEFITS = [
+  { icon: MessageCircle, text: 'Describe symptoms to Nura and get clear next steps' },
+  { icon: CalendarCheck, text: 'Book sessions with verified doctors near you' },
+  { icon: ShieldCheck, text: 'Your medical profile stays private and in your control' }
+];
+
+function validate({ isSignup, name, email, phone, password, confirm }) {
+  const e = {};
+  if (isSignup && !name.trim()) e.name = 'Please enter your name.';
+  if (!email.trim()) e.email = 'Please enter your email address.';
+  else if (!EMAIL_RE.test(email.trim())) e.email = 'That email address does not look right.';
+  if (isSignup && phone.trim() && !PHONE_RE.test(phone.trim())) e.phone = 'Enter a valid phone number.';
+  if (!password) e.password = isSignup ? 'Please choose a password.' : 'Please enter your password.';
+  else if (isSignup && password.length < 8) e.password = 'Use at least 8 characters.';
+  if (isSignup && password && confirm !== password) e.confirm = 'Passwords do not match.';
+  return e;
 }
 
 // One screen for both login and signup (mode = 'login' | 'signup')
@@ -46,28 +58,23 @@ export default function AuthPage({ mode }) {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [error, setError] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [serverError, setServerError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const validate = () => {
-    if (isSignup && !name.trim()) return 'Please enter your name.';
-    if (!EMAIL_RE.test(email.trim())) return 'Please enter a valid email address.';
-    if (!password) return 'Please enter your password.';
-    if (isSignup) {
-      if (password.length < 8) return 'Password must be at least 8 characters.';
-      if (password !== confirm) return 'Passwords do not match.';
-    }
-    return '';
-  };
+  const errors = validate({ isSignup, name, email, phone, password, confirm });
+  const err = (key) => (submitted ? errors[key] : undefined);
+  const isOrg = isSignup && role === 'organization';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const problem = validate();
-    if (problem) {
-      setError(problem);
+    setSubmitted(true);
+    setServerError('');
+    const first = Object.keys(errors)[0];
+    if (first) {
+      document.getElementById(`auth-${first}`)?.focus();
       return;
     }
-    setError('');
     setLoading(true);
     try {
       const user = isSignup
@@ -75,109 +82,142 @@ export default function AuthPage({ mode }) {
         : await login(email.trim(), password);
       const from = !isSignup && location.state?.from;
       navigate(from && user.role === 'user' ? from : homeForRole(user.role), { replace: true });
-    } catch (err) {
-      setError(err.message || 'Something went wrong. Please try again.');
-    } finally {
+    } catch (ex) {
+      setServerError(friendlyError(ex, isSignup ? 'We could not create your account. Please try again.' : 'We could not sign you in. Please try again.'));
       setLoading(false);
     }
   };
 
+  const fillDemo = (a) => {
+    setEmail(a.email);
+    setPassword(a.password);
+    setServerError('');
+    setSubmitted(false);
+  };
+
+  const editing = (setter) => (e) => { setter(e.target.value); if (serverError) setServerError(''); };
+
   return (
-    <div className={styles.authPage}>
-      <div className={styles.authContainer}>
-        <div className={styles.authHeaderBox}>
-          <Link to="/" className={styles.backHomeLink}>← Back to MediGuide Home</Link>
-          <div className={styles.brandBadge}>
-            <img src="/logo.png" alt="" width="22" height="22" style={{ borderRadius: 6 }} />
-            <span className={styles.brandNameText}>MediGuide</span>
+    <div className={styles.page}>
+      <aside className={styles.brandPanel} aria-hidden="true">
+        <Logo size={36} />
+        <div className={styles.brandCenter}>
+          <div className={styles.nuraHalo}>
+            <Nura size={168} mood="happy" />
           </div>
-          <h1 className={styles.mainHeading}>{isSignup ? 'Create your account' : 'Welcome back'}</h1>
-          <p className={styles.subHeading}>
-            {isSignup ? 'Join MediGuide to take charge of your health journey.' : 'Sign in to your health triage & appointments'}
+          <p className={styles.promise}>Care, guided by Nura</p>
+          <ul className={styles.benefits}>
+            {BENEFITS.map(({ icon: Icon, text }) => (
+              <li key={text}>
+                <span className={styles.benefitIcon}><Icon size={18} /></span>
+                <span>{text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p className={styles.brandFoot}>General guidance only. In an emergency, call your local emergency number.</p>
+      </aside>
+
+      <main className={styles.formSide}>
+        <div className={styles.formWrap}>
+          <div className={styles.topRow}>
+            <span className={styles.mobileLogo}><Logo size={32} /></span>
+            {!IS_NATIVE && (
+              <Link to="/" className={styles.backLink}>
+                <ArrowLeft size={16} aria-hidden="true" />
+                Home
+              </Link>
+            )}
+          </div>
+
+          <header className={styles.head}>
+            <h1 className={styles.title}>{isSignup ? 'Create your account' : 'Welcome back'}</h1>
+            <p className={styles.subtitle}>
+              {isSignup
+                ? (isOrg ? 'List your facility and let patients book your doctors.' : 'Get guidance from Nura and book care in minutes.')
+                : 'Sign in to continue to MediGuide.'}
+            </p>
+          </header>
+
+          <div className={styles.card}>
+            <form onSubmit={handleSubmit} className={styles.form} noValidate>
+              {isSignup && (
+                <div className={styles.roleGroup}>
+                  <span className={styles.groupLabel} id="auth-role-label">I am signing up as</span>
+                  <Segmented label="Account type" options={ROLE_OPTIONS} value={role} onChange={setRole} />
+                </div>
+              )}
+
+              {isSignup && (
+                <Field label={isOrg ? 'Contact person' : 'Full name'} htmlFor="auth-name" error={err('name')}>
+                  <Input id="auth-name" value={name} onChange={editing(setName)} placeholder="Jane Doe" autoComplete="name" maxLength={80} invalid={Boolean(err('name'))} />
+                </Field>
+              )}
+
+              <Field label={isOrg ? 'Work email' : 'Email'} htmlFor="auth-email" error={err('email')}>
+                <Input id="auth-email" type="email" inputMode="email" value={email} onChange={editing(setEmail)} placeholder="you@example.com" autoComplete="email" invalid={Boolean(err('email'))} />
+              </Field>
+
+              {isSignup && (
+                <Field label="Phone" optional htmlFor="auth-phone" error={err('phone')}>
+                  <Input id="auth-phone" type="tel" inputMode="tel" value={phone} onChange={editing(setPhone)} placeholder="+92 300 1234567" autoComplete="tel" invalid={Boolean(err('phone'))} />
+                </Field>
+              )}
+
+              <Field label="Password" htmlFor="auth-password" error={err('password')} hint={isSignup ? 'At least 8 characters.' : undefined}>
+                <PasswordInput
+                  id="auth-password"
+                  value={password}
+                  onChange={editing(setPassword)}
+                  placeholder={isSignup ? 'Create a password' : 'Your password'}
+                  autoComplete={isSignup ? 'new-password' : 'current-password'}
+                  invalid={Boolean(err('password'))}
+                />
+              </Field>
+
+              {isSignup && (
+                <Field label="Confirm password" htmlFor="auth-confirm" error={err('confirm')}>
+                  <PasswordInput id="auth-confirm" value={confirm} onChange={editing(setConfirm)} placeholder="Repeat your password" autoComplete="new-password" invalid={Boolean(err('confirm'))} />
+                </Field>
+              )}
+
+              <div aria-live="assertive">
+                {serverError && <Alert tone="danger" icon={AlertCircle}>{serverError}</Alert>}
+              </div>
+
+              <Button type="submit" size="lg" block loading={loading}>
+                {loading ? (isSignup ? 'Creating account' : 'Signing in') : (isSignup ? 'Create account' : 'Sign in')}
+              </Button>
+            </form>
+
+            {SHOW_DEMO && !isSignup && (
+              <div className={styles.demo}>
+                <span className={styles.demoLabel}>Demo accounts</span>
+                <div className={styles.demoRow}>
+                  {DEMO_ACCOUNTS.map((a) => (
+                    <button key={a.label} type="button" className={styles.demoChip} onClick={() => fillDemo(a)} aria-label={`Fill in the ${a.label.toLowerCase()} demo account`}>
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <p className={styles.switch}>
+            {isSignup ? 'Already have an account?' : 'New to MediGuide?'}{' '}
+            <Link to={isSignup ? '/login' : '/signup'} className={styles.switchLink}>
+              {isSignup ? 'Sign in' : 'Create an account'}
+            </Link>
           </p>
+
+          {isSignup && (
+            <p className={styles.legal}>
+              MediGuide gives general guidance and does not replace a doctor.
+            </p>
+          )}
         </div>
-
-        <div className={styles.authCard}>
-          <form onSubmit={handleSubmit} className={styles.form} noValidate>
-            {isSignup && (
-              <div className={styles.roleTabs} role="tablist" aria-label="Account type">
-                <button type="button" role="tab" aria-selected={role === 'user'}
-                  className={`${styles.roleTab} ${role === 'user' ? styles.activeRole : ''}`} onClick={() => setRole('user')}>
-                  I&apos;m a patient
-                </button>
-                <button type="button" role="tab" aria-selected={role === 'organization'}
-                  className={`${styles.roleTab} ${role === 'organization' ? styles.activeRole : ''}`} onClick={() => setRole('organization')}>
-                  Healthcare organization
-                </button>
-              </div>
-            )}
-
-            {isSignup && (
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="name">{role === 'organization' ? 'Contact person' : 'Full name'}</label>
-                <input id="name" className={styles.input} value={name} onChange={(e) => setName(e.target.value)}
-                  placeholder="Jane Doe" autoComplete="name" />
-              </div>
-            )}
-
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="email">Email</label>
-              <input id="email" type="email" inputMode="email" className={styles.input} value={email}
-                onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" />
-            </div>
-
-            {isSignup && (
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="phone">Phone <span style={{ fontWeight: 400 }}>(optional)</span></label>
-                <input id="phone" type="tel" inputMode="tel" className={styles.input} value={phone}
-                  onChange={(e) => setPhone(e.target.value)} placeholder="+92 300 1234567" autoComplete="tel" />
-              </div>
-            )}
-
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="password">Password</label>
-              <PasswordInput id="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                placeholder={isSignup ? 'At least 8 characters' : 'Your password'}
-                autoComplete={isSignup ? 'new-password' : 'current-password'} />
-            </div>
-
-            {isSignup && (
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="confirm">Confirm password</label>
-                <PasswordInput id="confirm" value={confirm} onChange={(e) => setConfirm(e.target.value)}
-                  placeholder="Repeat password" autoComplete="new-password" />
-              </div>
-            )}
-
-            {error && <p className={styles.errorMsg} role="alert">{error}</p>}
-
-            <button type="submit" disabled={loading} className={styles.submitBtn}>
-              {loading ? (isSignup ? 'Creating account…' : 'Signing in…') : (isSignup ? 'Create account' : 'Sign in')}
-            </button>
-          </form>
-        </div>
-
-        {SHOW_DEMO && !isSignup && (
-          <div className={styles.demoBox}>
-            Demo accounts — tap to fill:
-            <div className={styles.demoRow}>
-              {DEMO_ACCOUNTS.map((a) => (
-                <button key={a.label} type="button" className={styles.demoChip}
-                  onClick={() => { setEmail(a.email); setPassword(a.password); setError(''); }}>
-                  {a.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <p className={styles.footerText}>
-          {isSignup ? 'Already have an account? ' : "Don't have an account? "}
-          <Link to={isSignup ? '/login' : '/signup'} className={styles.footerLink}>
-            {isSignup ? 'Sign in' : 'Sign up'}
-          </Link>
-        </p>
-      </div>
+      </main>
     </div>
   );
 }

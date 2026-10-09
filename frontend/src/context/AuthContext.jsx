@@ -10,15 +10,34 @@ export const homeForRole = (role) => {
   return '/patient/home';
 };
 
+// Last known user, so a returning user sees the app instantly while /me refreshes
+// in the background (free hosting can take ~30s to wake up).
+const CACHE_KEY = 'mediguide_user_cache';
+const readCachedUser = () => {
+  if (!api.getToken()) return null;
+  try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || null; } catch { return null; }
+};
+const writeCachedUser = (u) => {
+  try {
+    if (u) localStorage.setItem(CACHE_KEY, JSON.stringify(u));
+    else localStorage.removeItem(CACHE_KEY);
+  } catch { /* storage unavailable */ }
+};
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  // True until we know whether the stored token (if any) is valid
-  const [loading, setLoading] = useState(Boolean(api.getToken()));
+  const [user, setUserState] = useState(readCachedUser);
+  // True until we know whether the stored token (if any) is valid; skipped when a cached user exists
+  const [loading, setLoading] = useState(() => Boolean(api.getToken()) && !readCachedUser());
+
+  const setUser = useCallback((u) => {
+    setUserState(u);
+    writeCachedUser(u);
+  }, []);
 
   const logout = useCallback(() => {
     api.setToken('');
     setUser(null);
-  }, []);
+  }, [setUser]);
 
   // Restore the session from the stored token
   useEffect(() => {
@@ -32,7 +51,7 @@ export function AuthProvider({ children }) {
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [logout]);
+  }, [logout, setUser]);
 
   // Any API call that comes back 401 signs the user out everywhere
   useEffect(() => {
@@ -45,27 +64,27 @@ export function AuthProvider({ children }) {
     api.setToken(res.token);
     setUser(res.user);
     return res.user;
-  }, []);
+  }, [setUser]);
 
   const register = useCallback(async (payload) => {
     const res = await api.registerUser(payload);
     api.setToken(res.token);
     setUser(res.user);
     return res.user;
-  }, []);
+  }, [setUser]);
 
   // Partial profile update; the server returns the saved user
   const updateProfile = useCallback(async (payload) => {
     const res = await api.updateUserProfile(payload);
     setUser(res.data);
     return res.data;
-  }, []);
+  }, [setUser]);
 
   const changePassword = useCallback(async (currentPassword, newPassword) => {
     const res = await api.changePassword(currentPassword, newPassword);
     api.setToken(res.token);
     setUser(res.user);
-  }, []);
+  }, [setUser]);
 
   const deleteAccount = useCallback(async (password) => {
     await api.deleteAccount(password);

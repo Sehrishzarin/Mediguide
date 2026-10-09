@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { AlertCircle, X } from 'lucide-react';
 import styles from './ErrorToast.module.css';
 
 function ErrorToast({ message, onClose, duration = 5000 }) {
@@ -17,24 +18,10 @@ function ErrorToast({ message, onClose, duration = 5000 }) {
   return (
     <div className={styles.wrapper} role="alert">
       <div className={styles.toast}>
-        <svg
-          className={styles.icon}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
-          />
-        </svg>
+        <AlertCircle size={18} className={styles.icon} aria-hidden="true" />
         <p className={styles.message}>{message}</p>
         <button type="button" onClick={onClose} className={styles.closeBtn} aria-label="Dismiss">
-          <svg className={styles.closeSvg} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-          </svg>
+          <X size={16} aria-hidden="true" />
         </button>
       </div>
     </div>

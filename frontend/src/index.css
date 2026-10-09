@@ -1,10 +1,121 @@
-/* ── Global Resets & Typography ──────────────────────────────── */
+/* ============================================================
+   MediGuide design system — global tokens & base styles
+   One font, one spacing scale, one accent. Components live in
+   src/components/ui; screens should use tokens, never raw hex.
+   ============================================================ */
+
+:root {
+  /* ── Colour: neutrals ── */
+  --bg: #F5F7F8;            /* app background */
+  --surface: #FFFFFF;       /* cards, sheets */
+  --surface-2: #F0F3F5;     /* inset areas, inputs at rest, hover */
+  --border: #E3E8EB;
+  --border-strong: #CBD3D9;
+  --text: #0F1B24;
+  --text-2: #4A5A66;        /* secondary text */
+  --text-3: #7A8994;        /* hints, meta */
+
+  /* ── Colour: brand (deep teal, AA on white) ── */
+  --brand: #0B7A70;
+  --brand-hover: #09665E;
+  --brand-soft: #E6F4F2;
+  --brand-ink: #064E48;     /* text on brand-soft */
+
+  /* ── Colour: Nura (assistant identity) ── */
+  --nura-1: #22B8A0;
+  --nura-2: #3D9BE0;
+  --nura-3: #7C8BF2;
+
+  /* ── Colour: status ── */
+  --danger: #C8322B;
+  --danger-hover: #A9271F;
+  --danger-soft: #FDECEA;
+  --warning: #B35C00;
+  --warning-soft: #FFF3E0;
+  --success: #1E7A3D;
+  --success-soft: #E8F5EC;
+  --info: #2457C5;
+  --info-soft: #EAF0FD;
+
+  /* ── Type ── */
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --fs-xs: 0.75rem;   /* 12 */
+  --fs-sm: 0.875rem;  /* 14 */
+  --fs-md: 1rem;      /* 16 */
+  --fs-lg: 1.125rem;  /* 18 */
+  --fs-xl: 1.375rem;  /* 22 */
+  --fs-2xl: 1.75rem;  /* 28 */
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* ── Space (4px grid) ── */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+
+  /* ── Shape & depth ── */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-full: 999px;
+  --shadow-1: 0 1px 2px rgba(15, 27, 36, 0.06);
+  --shadow-2: 0 4px 16px rgba(15, 27, 36, 0.08);
+  --shadow-3: 0 12px 32px rgba(15, 27, 36, 0.14);
+  --ring: 0 0 0 3px rgba(11, 122, 112, 0.25);
+
+  /* ── Layout ── */
+  --tap: 44px;              /* minimum touch target */
+  --content-max: 1080px;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ── Legacy aliases (older screens; map onto the new system) ── */
+  --color-primary: var(--brand);
+  --color-primary-light: var(--nura-1);
+  --color-primary-gradient: linear-gradient(135deg, var(--brand) 0%, var(--nura-1) 100%);
+  --color-accent: var(--warning);
+  --color-surface: var(--bg);
+  --color-card: var(--surface);
+  --color-text-primary: var(--text);
+  --color-text-muted: var(--text-2);
+  --color-danger: var(--danger);
+  --color-border: var(--border);
+  --radius-card: var(--r-lg);
+  --radius-pill: var(--r-full);
+  --radius-action: var(--r-md);
+  --shadow-soft: var(--shadow-1);
+  --shadow-hover: var(--shadow-2);
+  --space-1: var(--sp-1);
+  --space-2: var(--sp-2);
+  --space-3: var(--sp-3);
+  --space-4: var(--sp-4);
+  --space-6: var(--sp-6);
+  --space-8: var(--sp-8);
+  --space-12: var(--sp-12);
+  --transition-fast: all 0.15s var(--ease);
+  --transition-normal: all 0.25s var(--ease);
+}
+
+/* ── Reset ── */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -15,23 +126,17 @@ body,
   min-height: 100dvh;
 }
 
-html {
-  -webkit-text-size-adjust: 100%;
-  -webkit-tap-highlight-color: transparent;
-}
-
 body {
-  overflow-x: hidden;
-}
-
-body {
-  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  color: var(--color-text-primary);
-  background: var(--color-surface);
-  line-height: 1.5;
+  overflow-x: hidden;
+  font-feature-settings: 'cv11', 'ss01';
 }
 
 #root {
@@ -53,98 +158,70 @@ a {
 button {
   cursor: pointer;
   font: inherit;
+  color: inherit;
   border: none;
   background: none;
 }
 
-button:active {
-  transform: scale(0.97);
-  transition: transform 0.1s ease;
-}
-
-input,
-select,
-textarea {
-  font: inherit;
-}
-
-/* ── Figma Design Tokens ────────────────────────────────────── */
-:root {
-  /* Core Colors */
-  --color-primary: #0F9C8E;
-  --color-primary-light: #5FD3C4;
-  --color-primary-gradient: linear-gradient(135deg, #0F9C8E 0%, #5FD3C4 100%);
-  --color-accent: #FF8A65;
-  --color-surface: #F6FBFA;
-  --color-card: #FFFFFF;
-  --color-text-primary: #1A1F1E;
-  --color-text-muted: #6B7876;
-  --color-danger: #E53E3E;
-  --color-border: #E2ECE9;
-
-  /* Border Radius */
-  --radius-card: 18px;
-  --radius-pill: 999px;
-  --radius-action: 12px;
-
-  /* Shadows & Elevation */
-  --shadow-soft: 0 4px 16px rgba(15, 156, 142, 0.10);
-  --shadow-hover: 0 8px 24px rgba(15, 156, 142, 0.15);
-
-  /* Spacing Scale (4px base) */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-12: 48px;
-
-  /* Animation Tokens */
-  --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-normal: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Card Entry Animation */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in {
-  animation: fadeInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-
-/* Skeleton Placeholder Animations */
-@keyframes pulseSkeleton {
-  0% { opacity: 0.6; }
-  50% { opacity: 0.3; }
-  100% { opacity: 0.6; }
-}
-
-.skeleton-box {
-  background: #E2ECE9;
-  border-radius: var(--radius-action);
-  animation: pulseSkeleton 1.5s infinite ease-in-out;
-}
-
-/* ── Accessibility & touch ───────────────────────────────────── */
-:focus-visible {
-  outline: 3px solid rgba(15, 156, 142, 0.55);
-  outline-offset: 2px;
+button:disabled {
+  cursor: not-allowed;
 }
 
 /* 16px minimum stops iOS Safari zooming into focused fields */
 input,
 select,
 textarea {
+  font: inherit;
   font-size: max(16px, 1em);
+  color: inherit;
+}
+
+h1, h2, h3, h4 {
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  font-weight: var(--fw-semibold);
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+::selection {
+  background: var(--brand-soft);
+}
+
+/* ── Utilities ── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeInUp 0.25s var(--ease) both;
+}
+
+@keyframes pulseSkeleton {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.skeleton-box {
+  background: var(--surface-2);
+  border-radius: var(--r-md);
+  animation: pulseSkeleton 1.4s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

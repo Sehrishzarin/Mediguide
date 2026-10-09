@@ -1,0 +1,43 @@
+.wrap { display: flex; flex-direction: column; gap: var(--sp-1); }
+
+.box {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-1);
+  padding: var(--sp-1);
+  padding-left: var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-xl);
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+.box:focus-within { border-color: var(--brand); box-shadow: var(--ring); }
+.boxListening { border-color: var(--nura-1); }
+
+.input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap);
+  max-height: 140px;
+  padding: 10px 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+}
+.input::placeholder { color: var(--text-3); }
+
+.mic { border-radius: var(--r-full); }
+.micOn,
+.micOn:hover { background: var(--brand-soft); color: var(--brand); }
+
+.box > button:last-child { border-radius: var(--r-full); }
+
+.voiceNote {
+  font-size: var(--fs-xs);
+  color: var(--warning);
+  padding: 0 var(--sp-2);
+}

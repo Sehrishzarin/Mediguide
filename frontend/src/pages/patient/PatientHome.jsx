@@ -1,50 +1,47 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { CalendarPlus, MapPin, Siren, CalendarClock, ClipboardList, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getMyAppointments } from '../../services/api';
-import { slotToDate, formatSlotDate, formatSlotTime } from './slotTime';
+import { Card, SectionHeader, List, ListItem, Alert, Button, Skeleton } from '../../components/ui';
+import Nura from '../../components/nura/Nura';
+import { loadSessions } from './chatStorage';
+import { slotToDate, formatSlotDate, formatSlotTime } from './care/slotTime';
+import { friendlyError } from './care/errors';
 import styles from './PatientHome.module.css';
 
-// Leaflet is heavy: keep it out of the first paint
-const HospitalMap = lazy(() => import('../../components/HospitalMap'));
-
-const ACTIONS = [
-  {
-    label: 'AI Health Consultation',
-    description: 'Describe symptoms and get guidance on where to go',
-    badgeBg: '#E0F2FE',
-    iconColor: '#0F9C8E',
-    path: 'M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z',
-    to: '/patient/triage?new=true'
-  },
-  {
-    label: 'Book a Doctor Session',
-    description: 'Browse real open sessions and book in seconds',
-    badgeBg: '#FEF3C7',
-    iconColor: '#D97706',
-    path: 'M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5',
-    to: '/patient/slots'
-  },
-  {
-    label: 'Emergency Help',
-    description: 'Call 1122, share your location, find the nearest hospital',
-    badgeBg: '#FEE2E2',
-    iconColor: '#E53E3E',
-    path: 'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z',
-    to: '/patient/emergency'
-  }
+const SUGGESTIONS = [
+  'I have a headache and fever',
+  'Which doctor should I see for a rash?',
+  'Is my chest pain urgent?'
 ];
 
-function readRecentChats(userId) {
-  if (!userId) return [];
-  try {
-    const raw = localStorage.getItem(`mediguide_ai_chats:${userId}`);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter((c) => c && c.id).slice(0, 3) : [];
-  } catch {
-    return [];
-  }
-}
+const QUICK_ACTIONS = [
+  { to: '/patient/care/book', label: 'Book a doctor', icon: CalendarPlus, tone: 'brand' },
+  { to: '/patient/care/nearby', label: 'Nearby care', icon: MapPin, tone: 'brand' },
+  { to: '/patient/emergency', label: 'Emergency', icon: Siren, tone: 'danger' }
+];
+
+const greetingFor = (date) => {
+  const h = date.getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+};
+
+const relativeTime = (iso, now) => {
+  const t = new Date(iso).getTime();
+  if (!iso || Number.isNaN(t) || t <= 0) return '';
+  const mins = Math.round((now.getTime() - t) / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.round(hours / 24);
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days} days ago`;
+  return new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+};
 
 function missingProfileFields(profile) {
   const p = profile || {};
@@ -55,18 +52,39 @@ function missingProfileFields(profile) {
   return missing;
 }
 
-function MapSkeleton() {
+const joinWords = (items) =>
+  items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+
+// ── Nura hero card ──────────────────────────────────────────────────────
+function NuraCard({ className }) {
   return (
-    <div className={styles.mapSkeleton} aria-busy="true" aria-label="Loading map">
-      <div className={`skeleton-box ${styles.mapSkeletonMap}`} />
-      <div className={`skeleton-box ${styles.mapSkeletonRow}`} />
-      <div className={`skeleton-box ${styles.mapSkeletonRow}`} />
-    </div>
+    <Card as="section" padding="none" className={`${styles.nuraCard} ${className}`} aria-labelledby="ask-nura-h">
+      <div className={styles.nuraHead}>
+        <Nura size={56} mood="idle" />
+        <div>
+          <h2 id="ask-nura-h" className={styles.nuraTitle}>Ask Nura</h2>
+          <p className={styles.nuraText}>Tell Nura how you feel and get clear next steps.</p>
+        </div>
+      </div>
+      <Link to="/patient/nura/new" className={styles.fakeInput}>
+        <span className={styles.fakeInputText}>
+          <span className={styles.longText}>Describe a symptom or ask a health question</span>
+          <span className={styles.shortText}>Describe a symptom or ask a question</span>
+        </span>
+        <span className={styles.fakeInputIcon} aria-hidden="true"><ArrowRight size={18} /></span>
+      </Link>
+      <div className={styles.suggestions} aria-label="Suggested questions">
+        {SUGGESTIONS.map((q) => (
+          <Link key={q} to={`/patient/nura/new?q=${encodeURIComponent(q)}`} className={styles.suggestion}>{q}</Link>
+        ))}
+      </div>
+    </Card>
   );
 }
 
-function NextAppointment() {
-  const [state, setState] = useState({ status: 'loading', next: null, error: '' });
+// ── Next appointment ────────────────────────────────────────────────────
+function NextAppointment({ className }) {
+  const [state, setState] = useState({ status: 'loading', next: null });
   const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
@@ -75,150 +93,155 @@ function NextAppointment() {
       .then((res) => {
         if (cancelled) return;
         const now = new Date();
-        const upcoming = (res.data || []).find((a) => slotToDate(a.date, a.time) >= now) || null;
-        setState({ status: 'ready', next: upcoming, error: '' });
+        const next = (res.data || [])
+          .map((a) => ({ a, t: slotToDate(a.date, a.time) }))
+          .filter((x) => x.t >= now)
+          .sort((x, y) => x.t - y.t)[0]?.a || null;
+        setState({ status: 'ready', next });
       })
-      .catch((err) => { if (!cancelled) setState({ status: 'error', next: null, error: err.message }); });
+      .catch((err) => { if (!cancelled) setState({ status: 'error', next: null, error: friendlyError(err, "Couldn't load appointments") }); });
     return () => { cancelled = true; };
   }, [nonce]);
 
-  const retry = () => { setState({ status: 'loading', next: null, error: '' }); setNonce((n) => n + 1); };
-
-  if (state.status === 'loading') {
-    return <div className={`skeleton-box ${styles.apptSkeleton}`} aria-busy="true" aria-label="Loading appointment" />;
-  }
-
-  if (state.status === 'error') {
-    return (
-      <div className={styles.apptCard}>
-        <div className={styles.apptBody}>
-          <span className={styles.apptLabel}>Next appointment</span>
-          <p className={styles.apptError} role="alert">{state.error}</p>
-        </div>
-        <button type="button" className={styles.apptBtn} onClick={retry}>Retry</button>
-      </div>
-    );
-  }
-
-  const { next } = state;
-  if (!next) {
-    return (
-      <div className={styles.apptCard}>
-        <div className={styles.apptBody}>
-          <span className={styles.apptLabel}>Next appointment</span>
-          <p className={styles.apptTitle}>Nothing booked yet</p>
-          <p className={styles.apptMeta}>Find a doctor session that suits you.</p>
-        </div>
-        <Link to="/patient/slots" className={styles.apptBtn}>Book now</Link>
-      </div>
-    );
-  }
+  const retry = () => { setState({ status: 'loading', next: null }); setNonce((n) => n + 1); };
+  const { status, next } = state;
 
   return (
-    <Link to="/patient/appointments" className={styles.apptCard}>
-      <div className={styles.apptDate} aria-hidden="true">
-        <span>{formatSlotDate(next.date, { month: 'short' })}</span>
-        <strong>{formatSlotDate(next.date, { day: 'numeric' })}</strong>
-      </div>
-      <div className={styles.apptBody}>
-        <span className={styles.apptLabel}>Next appointment</span>
-        <p className={styles.apptTitle}>{next.doctor}</p>
-        <p className={styles.apptMeta}>
-          {next.specialty} · {formatSlotDate(next.date)} at {formatSlotTime(next.date, next.time)}
-        </p>
-        <p className={styles.apptMeta}>{next.org}</p>
-      </div>
-      <span className={styles.apptChevron} aria-hidden="true">&rsaquo;</span>
-    </Link>
+    <section className={className} aria-labelledby="next-appt-h">
+      <SectionHeader
+        title={<span id="next-appt-h">Next appointment</span>}
+        action={<Link to="/patient/care/appointments" className={styles.textLink}>View all</Link>}
+      />
+      {status === 'loading' && (
+        <Card padding="md" className={styles.apptSkeleton} aria-busy="true" aria-label="Loading appointment">
+          <Skeleton width={44} height={44} radius="var(--r-md)" />
+          <div className={styles.apptSkeletonText}>
+            <Skeleton width="60%" height={14} />
+            <Skeleton width="85%" height={12} />
+          </div>
+        </Card>
+      )}
+      {status === 'error' && (
+        <List>
+          <div className={styles.inlineError} role="alert">
+            <span>{state.error}</span>
+            <Button variant="ghost" size="sm" onClick={retry}>Retry</Button>
+          </div>
+        </List>
+      )}
+      {status === 'ready' && !next && (
+        <List>
+          <ListItem
+            icon={CalendarClock}
+            iconTone="neutral"
+            title="No upcoming appointments"
+            subtitle="Book a doctor"
+            to="/patient/care/book"
+          />
+        </List>
+      )}
+      {status === 'ready' && next && (
+        <List>
+          <ListItem
+            to="/patient/care/appointments"
+            leading={
+              <span className={styles.dateTile} aria-hidden="true">
+                <span>{formatSlotDate(next.date, { month: 'short' })}</span>
+                <strong>{formatSlotDate(next.date, { day: 'numeric' })}</strong>
+              </span>
+            }
+            title={next.doctor}
+            subtitle={
+              <>
+                <span className={styles.apptLine}>{next.specialty} · {next.org}</span>
+                <span className={styles.apptLine}>{formatSlotDate(next.date, { weekday: 'long', day: 'numeric', month: 'short' })} at {formatSlotTime(next.date, next.time)}</span>
+              </>
+            }
+          />
+        </List>
+      )}
+    </section>
   );
 }
 
+// ── Page ────────────────────────────────────────────────────────────────
 function PatientHome() {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const [recentChats] = useState(() => readRecentChats(user?.id));
+  // Captured once per visit: keeps render pure while greeting and relative times stay correct
+  const [now] = useState(() => new Date());
+  const [sessions] = useState(() => (user?.id ? loadSessions(user.id) : []));
 
-  const handleSelectBooking = useCallback((org) => {
-    navigate('/patient/slots', { state: { orgName: org.name } });
-  }, [navigate]);
+  const greeting = useMemo(() => greetingFor(now), [now]);
+  const today = useMemo(() => now.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }), [now]);
+  const recent = useMemo(
+    () => [...sessions]
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
+      .slice(0, 3),
+    [sessions]
+  );
 
-  const profile = user?.medicalProfile;
-  const missing = missingProfileFields(profile);
-  const firstName = user?.name ? user.name.split(' ')[0] : '';
+  const firstName = user?.name ? user.name.trim().split(/\s+/)[0] : '';
+  const missing = missingProfileFields(user?.medicalProfile);
 
   return (
-    <div className={styles.container}>
-      <div className={styles.portalGrid}>
-        <div className={styles.portalMainCol}>
-          <div className={styles.heroPanel}>
-            <span className={styles.welcomePill}>Welcome back</span>
-            <h1 className={styles.heroTitle}>Hello{firstName ? `, ${firstName}` : ''}</h1>
-            <p className={styles.heroSubtitle}>Your AI-guided health triage and emergency navigation hub.</p>
-          </div>
+    <div className={styles.page}>
+      <header className={styles.greeting}>
+        <h1 className={styles.greetingTitle}>{greeting}{firstName ? `, ${firstName}` : ''}</h1>
+        <p className={styles.greetingDate}>{today}</p>
+      </header>
 
-          <NextAppointment />
+      <div className={styles.grid}>
+        <NuraCard className={styles.areaNura} />
+
+        <div className={styles.side}>
+          <NextAppointment className={styles.areaAppt} />
 
           {missing.length > 0 && (
-            <Link to="/patient/profile" className={styles.nudge}>
-              <div className={styles.nudgeText}>
-                <strong>Complete your medical profile</strong>
-                <span>Add your {missing.join(', ')} so doctors and responders have what they need.</span>
-              </div>
-              <span className={styles.nudgeCta}>Update &rarr;</span>
-            </Link>
+            <Alert
+              tone="info"
+              icon={ClipboardList}
+              title="Complete your medical profile"
+              className={styles.areaNudge}
+              action={<Button variant="ghost" size="sm" to="/patient/profile">Update</Button>}
+            >
+              Add your {joinWords(missing)} so doctors and responders have what they need.
+            </Alert>
           )}
+        </div>
 
-          <div className={styles.actionsList}>
-            {ACTIONS.map((action) => (
-              <Link key={action.label} to={action.to} className={styles.elevatedCard}>
-                <div className={styles.cardLeftBadge} style={{ background: action.badgeBg, color: action.iconColor }}>
-                  <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d={action.path} />
-                  </svg>
-                </div>
-                <div className={styles.cardBody}>
-                  <h3 className={styles.cardTitle}>{action.label}</h3>
-                  <p className={styles.cardDesc}>{action.description}</p>
-                </div>
-                <span className={styles.cardChevron} aria-hidden="true">&rsaquo;</span>
-              </Link>
+        <section className={styles.areaActions} aria-labelledby="quick-h">
+          <h2 id="quick-h" className="sr-only">Quick actions</h2>
+          <div className={styles.tiles}>
+            {QUICK_ACTIONS.map(({ to, label, icon: Icon, tone }) => (
+              <Card key={to} as={Link} to={to} padding="sm" interactive className={styles.tile}>
+                <span className={`${styles.tileIcon} ${tone === 'danger' ? styles.tileIconDanger : ''}`}>
+                  <Icon size={20} aria-hidden="true" />
+                </span>
+                <span className={styles.tileLabel}>{label}</span>
+              </Card>
             ))}
-            <Link to="/patient/appointments" className={styles.linkRow}>View all my appointments &rarr;</Link>
           </div>
+        </section>
 
-          <div className={styles.recentConsultationsCard}>
-            <div className={styles.recentHeaderRow}>
-              <h3 className={styles.recentTitle}>Recent AI consultations</h3>
-              <Link to="/patient/triage?new=true" className={styles.btnStartNewLink}>+ Start new</Link>
-            </div>
-
-            {recentChats.length === 0 ? (
-              <p className={styles.emptyRecentText}>No consultations yet. Describe how you feel and get guidance in a minute.</p>
-            ) : (
-              <div className={styles.recentList}>
-                {recentChats.map((chat) => (
-                  <Link key={chat.id} to={`/patient/triage?session=${encodeURIComponent(chat.id)}`} className={styles.recentItem}>
-                    <div className={styles.recentItemBody}>
-                      <strong className={styles.recentItemTitle}>{chat.title || 'Consultation'}</strong>
-                      <span className={styles.recentItemMeta}>
-                        {chat.createdAt ? new Date(chat.createdAt).toLocaleDateString() : ''} · {chat.messages?.length || 0} messages
-                      </span>
-                    </div>
-                    <span className={styles.resumeArrow}>Resume &rarr;</span>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className={styles.portalSideCol}>
-          <div className={styles.mapPortalWrapper}>
-            <Suspense fallback={<MapSkeleton />}>
-              <HospitalMap onSelectBooking={handleSelectBooking} />
-            </Suspense>
-          </div>
-        </div>
+        {recent.length > 0 && (
+          <section className={styles.areaRecent} aria-labelledby="recent-h">
+            <SectionHeader
+              title={<span id="recent-h">Recent conversations</span>}
+              action={<Link to="/patient/nura" className={styles.textLink}>See all</Link>}
+            />
+            <List>
+              {recent.map((chat) => (
+                <ListItem
+                  key={chat.id}
+                  to={`/patient/nura/${encodeURIComponent(chat.id)}`}
+                  leading={<span className={styles.chatAvatar}><Nura size={36} still /></span>}
+                  title={chat.title || 'Conversation'}
+                  meta={relativeTime(chat.updatedAt || chat.createdAt, now)}
+                />
+              ))}
+            </List>
+          </section>
+        )}
       </div>
     </div>
   );

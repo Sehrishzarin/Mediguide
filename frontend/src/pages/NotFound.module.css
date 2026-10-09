@@ -1,45 +1,26 @@
 .page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-6);
+  min-height: 100vh;
   min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: 24px 16px;
-  background: var(--color-surface);
+  padding: var(--sp-8) var(--sp-4);
+  background: var(--bg);
 }
 
 .card {
   width: 100%;
-  max-width: 420px;
-  padding: 40px 28px;
+  max-width: 440px;
   text-align: center;
-  background: #fff;
-  border: 1px solid var(--color-border);
-  border-radius: 24px;
-  box-shadow: var(--shadow-soft);
 }
 
 .code {
-  font-size: 4.5rem;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.04em;
-  background: var(--color-primary-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
 }
-
-.title { margin-top: 12px; font-size: 1.375rem; font-weight: 800; }
-.text { margin-top: 8px; color: var(--color-text-muted); }
-.actions { margin-top: 24px; display: flex; flex-direction: column; gap: 10px; }
-
-.primary, .secondary {
-  min-height: 48px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-pill);
-  font-weight: 700;
-}
-
-.primary { background: var(--color-primary-gradient); color: #fff; }
-.secondary { border: 1.5px solid var(--color-border); color: var(--color-text-primary); }

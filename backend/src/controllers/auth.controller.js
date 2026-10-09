@@ -113,7 +113,7 @@ exports.changePassword = asyncHandler(async (req, res) => {
 
   const user = await User.findById(req.user.id).select('+password');
   if (!(await user.matchPassword(String(currentPassword)))) {
-    throw new HttpError(401, 'Current password is incorrect.');
+    throw new HttpError(400, 'Current password is incorrect.');
   }
 
   user.password = newPassword;
@@ -129,7 +129,7 @@ exports.deleteAccount = asyncHandler(async (req, res) => {
 
   const user = await User.findById(req.user.id).select('+password');
   if (!(await user.matchPassword(String(password)))) {
-    throw new HttpError(401, 'Password is incorrect.');
+    throw new HttpError(400, 'Password is incorrect.');
   }
 
   // Release booked sessions, drop uploads and remove owned organisations

@@ -21,45 +21,59 @@ class ErrorBoundary extends Component {
 
   render() {
     if (this.state.hasError) {
+      // Plain inline styles on design tokens: this must render even if the app's modules fail
       return (
-        <div style={{
+        <div role="alert" style={{
           minHeight: '100vh',
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#fef2f2',
-          fontFamily: "'Inter', 'Segoe UI', sans-serif",
-          padding: '2rem',
-          textAlign: 'center'
+          background: 'var(--bg)',
+          padding: 'var(--sp-4)'
         }}>
           <div style={{
-            background: 'white',
-            borderRadius: '1rem',
-            padding: '2.5rem',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
-            maxWidth: '480px',
-            width: '100%'
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--r-lg)',
+            padding: 'var(--sp-8) var(--sp-6)',
+            maxWidth: '420px',
+            width: '100%',
+            textAlign: 'center'
           }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#991b1b', margin: '0.5rem 0' }}>Something went wrong</h1>
-            <p style={{ color: '#64748b', fontSize: '0.9375rem', lineHeight: 1.6, margin: '1rem 0' }}>
-              An unexpected error occurred. Please try refreshing the page.
+            <span aria-hidden="true" style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 48,
+              height: 48,
+              borderRadius: '50%',
+              background: 'var(--danger-soft)',
+              color: 'var(--danger)',
+              marginBottom: 'var(--sp-3)'
+            }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" />
+              </svg>
+            </span>
+            <h1 style={{ fontSize: 'var(--fs-lg)', fontWeight: 600, color: 'var(--text)' }}>Something went wrong</h1>
+            <p style={{ marginTop: 'var(--sp-2)', color: 'var(--text-2)', fontSize: 'var(--fs-sm)' }}>
+              MediGuide hit an unexpected problem. Refreshing the page usually fixes it.
             </p>
             <button
+              type="button"
               onClick={() => window.location.reload()}
               style={{
-                background: '#0d9488',
-                color: 'white',
-                border: 'none',
-                padding: '0.75rem 1.5rem',
-                borderRadius: '0.5rem',
+                marginTop: 'var(--sp-5)',
+                minHeight: 'var(--tap)',
+                padding: '0 var(--sp-5)',
+                background: 'var(--brand)',
+                color: '#fff',
+                borderRadius: 'var(--r-md)',
                 fontWeight: 600,
-                fontSize: '0.9375rem',
-                cursor: 'pointer'
+                fontSize: 'var(--fs-sm)'
               }}
             >
-              Refresh Page
+              Refresh page
             </button>
           </div>
         </div>

@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { Crosshair, Plus, X, AlertCircle, Info } from 'lucide-react';
 import { createOrganization } from '../../services/api';
-import Spinner from '../../components/Spinner';
+import { Alert, Button, Card, Chip, Field, Input, Select } from '../../components/ui';
+import friendlyError from '../../utils/friendlyError';
 import styles from './OrgDashboard.module.css';
 
 const TYPES = ['Hospital', 'Clinic', 'Pharmacy', 'Diagnostic Center'];
@@ -22,7 +24,7 @@ function validate(f) {
   return e;
 }
 
-export default function OrgRegisterForm({ defaultEmail, onCreated, onCancel }) {
+export default function OrgRegisterForm({ defaultEmail, onCreated, onCancel, first }) {
   const [form, setForm] = useState({
     name: '', type: 'Hospital', address: '', phone: '', email: defaultEmail || '', latitude: '', longitude: ''
   });
@@ -32,7 +34,7 @@ export default function OrgRegisterForm({ defaultEmail, onCreated, onCancel }) {
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [locating, setLocating] = useState(false);
-  const [locationNote, setLocationNote] = useState('');
+  const [locationNote, setLocationNote] = useState({ tone: '', text: '' });
 
   const set = (key) => (e) => {
     setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -55,24 +57,25 @@ export default function OrgRegisterForm({ defaultEmail, onCreated, onCancel }) {
 
   const useMyLocation = () => {
     if (!navigator.geolocation) {
-      setLocationNote('Location is not available on this device. Enter the coordinates manually.');
+      setLocationNote({ tone: 'warning', text: 'Location is not available on this device. Enter the coordinates manually.' });
       return;
     }
     setLocating(true);
-    setLocationNote('');
+    setLocationNote({ tone: '', text: '' });
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setForm((f) => ({ ...f, latitude: pos.coords.latitude.toFixed(6), longitude: pos.coords.longitude.toFixed(6) }));
         setErrors((prev) => ({ ...prev, latitude: undefined, longitude: undefined }));
-        setLocationNote('Location captured. Stand at the facility when doing this for best accuracy.');
+        setLocationNote({ tone: 'success', text: 'Location captured. For best accuracy, do this while you are at the facility.' });
         setLocating(false);
       },
       (err) => {
-        setLocationNote(
-          err.code === 1
+        setLocationNote({
+          tone: 'warning',
+          text: err.code === 1
             ? 'Location permission was denied. Allow it in your browser settings or enter the coordinates manually.'
             : 'We could not detect your location. Enter the coordinates manually.'
-        );
+        });
         setLocating(false);
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
@@ -87,7 +90,7 @@ export default function OrgRegisterForm({ defaultEmail, onCreated, onCancel }) {
     setErrors(found);
     setSubmitError('');
     if (Object.keys(found).length) {
-      document.getElementById(Object.keys(found)[0])?.focus();
+      document.getElementById(`org-${Object.keys(found)[0]}`)?.focus();
       return;
     }
 
@@ -105,101 +108,97 @@ export default function OrgRegisterForm({ defaultEmail, onCreated, onCancel }) {
       });
       onCreated(res.data);
     } catch (err) {
-      setSubmitError(err.message);
+      setSubmitError(friendlyError(err, 'We could not submit your facility. Please try again.'));
       setSubmitting(false);
     }
   };
 
-  const field = (id, label, props = {}) => (
-    <div className={styles.field}>
-      <label htmlFor={id} className={styles.label}>{label}</label>
-      <input
-        id={id}
-        className={`${styles.input} ${errors[id] ? styles.inputError : ''}`}
-        value={form[id]}
-        onChange={set(id)}
-        aria-invalid={Boolean(errors[id])}
-        aria-describedby={errors[id] ? `${id}-err` : undefined}
-        {...props}
-      />
-      {errors[id] && <p id={`${id}-err`} className={styles.fieldError}>{errors[id]}</p>}
-    </div>
+  const field = (key, label, props = {}, fieldProps = {}) => (
+    <Field label={label} htmlFor={`org-${key}`} error={errors[key]} {...fieldProps}>
+      <Input id={`org-${key}`} value={form[key]} onChange={set(key)} invalid={Boolean(errors[key])} {...props} />
+    </Field>
   );
 
   return (
-    <form className={styles.card} onSubmit={submit} noValidate>
-      <h2 className={styles.cardTitle}>Register your facility</h2>
-      <p className={styles.muted}>
-        Tell us about your hospital, clinic, pharmacy or diagnostic centre. Our team reviews every listing before it appears to patients.
-      </p>
+    <Card as="form" padding="none" className={styles.orgCard} onSubmit={submit} noValidate>
+      <header className={styles.formHead}>
+        <h2 className={styles.orgTitle}>{first ? 'Register your first facility' : 'Register another facility'}</h2>
+        <p className={styles.muted}>
+          Tell us about your hospital, clinic, pharmacy or diagnostic centre. Our team reviews every listing before patients can see it.
+        </p>
+      </header>
 
-      <div className={styles.grid2}>
-        {field('name', 'Facility name', { autoComplete: 'organization', maxLength: 100, placeholder: 'City Care Hospital' })}
-        <div className={styles.field}>
-          <label htmlFor="type" className={styles.label}>Type</label>
-          <select id="type" className={styles.input} value={form.type} onChange={set('type')}>
-            {TYPES.map((t) => <option key={t}>{t}</option>)}
-          </select>
-        </div>
-      </div>
-
-      {field('address', 'Address', { autoComplete: 'street-address', maxLength: 200, placeholder: 'Street, area, city' })}
-
-      <div className={styles.grid2}>
-        {field('phone', 'Phone (optional)', { type: 'tel', autoComplete: 'tel', inputMode: 'tel', placeholder: '+92 300 1234567' })}
-        {field('email', 'Contact email (optional)', { type: 'email', autoComplete: 'email', inputMode: 'email' })}
-      </div>
-
-      <fieldset className={styles.fieldset}>
-        <legend className={styles.label}>Services offered</legend>
-        <div className={styles.chips}>
-          {services.map((s) => (
-            <span key={s} className={styles.chip}>
-              {s}
-              <button type="button" className={styles.chipX} aria-label={`Remove ${s}`} onClick={() => setServices((p) => p.filter((x) => x !== s))}>&#10005;</button>
-            </span>
-          ))}
-        </div>
-        <div className={styles.inlineRow}>
-          <input
-            className={styles.input}
-            value={serviceDraft}
-            onChange={(e) => setServiceDraft(e.target.value)}
-            onKeyDown={onServiceKey}
-            placeholder="Type a service and press Enter"
-            aria-label="Add a service"
-            maxLength={40}
-          />
-          <button type="button" className={styles.btnGhost} onClick={() => addService(serviceDraft)}>Add</button>
-        </div>
-        <div className={styles.suggestions}>
-          {SERVICE_SUGGESTIONS.filter((s) => !services.includes(s)).map((s) => (
-            <button key={s} type="button" className={styles.suggestion} onClick={() => addService(s)}>+ {s}</button>
-          ))}
-        </div>
-      </fieldset>
-
-      <fieldset className={styles.fieldset}>
-        <legend className={styles.label}>Location on the map</legend>
-        <p className={styles.muted}>Patients find you by distance, so we need your coordinates.</p>
-        <button type="button" className={styles.btnOutline} onClick={useMyLocation} disabled={locating}>
-          {locating ? <><Spinner size="sm" /> Detecting...</> : 'Use my current location'}
-        </button>
-        {locationNote && <p className={styles.note} role="status">{locationNote}</p>}
+      <div className={styles.formBody}>
         <div className={styles.grid2}>
-          {field('latitude', 'Latitude', { inputMode: 'decimal', placeholder: '24.8607' })}
-          {field('longitude', 'Longitude', { inputMode: 'decimal', placeholder: '67.0011' })}
+          {field('name', 'Facility name', { autoComplete: 'organization', maxLength: 100, placeholder: 'City Care Hospital' })}
+          <Field label="Type" htmlFor="org-type">
+            <Select id="org-type" value={form.type} onChange={set('type')}>
+              {TYPES.map((t) => <option key={t}>{t}</option>)}
+            </Select>
+          </Field>
         </div>
-      </fieldset>
 
-      {submitError && <p className={styles.formError} role="alert">{submitError}</p>}
+        {field('address', 'Address', { autoComplete: 'street-address', maxLength: 200, placeholder: 'Street, area, city' })}
 
-      <div className={styles.actions}>
-        {onCancel && <button type="button" className={styles.btnGhost} onClick={onCancel} disabled={submitting}>Cancel</button>}
-        <button type="submit" className={styles.btnPrimary} disabled={submitting}>
-          {submitting ? <><Spinner size="sm" /> Submitting...</> : 'Submit for review'}
-        </button>
+        <div className={styles.grid2}>
+          {field('phone', 'Phone', { type: 'tel', autoComplete: 'tel', inputMode: 'tel', placeholder: '+92 300 1234567' }, { optional: true })}
+          {field('email', 'Contact email', { type: 'email', autoComplete: 'email', inputMode: 'email' }, { optional: true })}
+        </div>
+
+        <fieldset className={styles.fieldset}>
+          <legend className={styles.legend}>Services offered <span className={styles.optional}>(optional)</span></legend>
+          {services.length > 0 && (
+            <ul className={styles.tagList} aria-label="Services added">
+              {services.map((s) => (
+                <li key={s} className={styles.tag}>
+                  <span>{s}</span>
+                  <button type="button" className={styles.tagX} aria-label={`Remove ${s}`} onClick={() => setServices((p) => p.filter((x) => x !== s))}>
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className={styles.inlineRow}>
+            <Input
+              value={serviceDraft}
+              onChange={(e) => setServiceDraft(e.target.value)}
+              onKeyDown={onServiceKey}
+              placeholder="Type a service and press Enter"
+              aria-label="Add a service"
+              maxLength={40}
+            />
+            <Button variant="secondary" icon={Plus} onClick={() => addService(serviceDraft)}>Add</Button>
+          </div>
+          <div className={styles.suggestions}>
+            {SERVICE_SUGGESTIONS.filter((s) => !services.includes(s)).map((s) => (
+              <Chip key={s} icon={Plus} onClick={() => addService(s)}>{s}</Chip>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className={styles.fieldset}>
+          <legend className={styles.legend}>Location on the map</legend>
+          <p className={styles.muted}>Patients find you by distance, so we need your coordinates.</p>
+          <div>
+            <Button variant="secondary" icon={Crosshair} onClick={useMyLocation} loading={locating}>
+              {locating ? 'Detecting location' : 'Use my current location'}
+            </Button>
+          </div>
+          {locationNote.text && <Alert tone={locationNote.tone} icon={Info}>{locationNote.text}</Alert>}
+          <div className={styles.grid2}>
+            {field('latitude', 'Latitude', { inputMode: 'decimal', placeholder: '24.8607' })}
+            {field('longitude', 'Longitude', { inputMode: 'decimal', placeholder: '67.0011' })}
+          </div>
+        </fieldset>
+
+        {submitError && <Alert tone="danger" icon={AlertCircle}>{submitError}</Alert>}
       </div>
-    </form>
+
+      <footer className={styles.formFoot}>
+        {onCancel && <Button variant="ghost" onClick={onCancel} disabled={submitting}>Cancel</Button>}
+        <Button type="submit" loading={submitting}>{submitting ? 'Submitting' : 'Submit for review'}</Button>
+      </footer>
+    </Card>
   );
 }

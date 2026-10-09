@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap:live": "node scripts/cap-mode.mjs live",
+    "cap:release": "node scripts/cap-mode.mjs release",
+    "cap:wifi": "node scripts/cap-mode.mjs wifi",
+    "cap:usb": "node scripts/cap-mode.mjs usb"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.1",
@@ -15,6 +19,7 @@
     "@capacitor/core": "^8.5.1",
     "@capacitor/geolocation": "^8.2.2",
     "leaflet": "^1.9.4",
+    "lucide-react": "^0.544.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-leaflet": "^5.0.0",

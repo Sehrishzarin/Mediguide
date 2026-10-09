@@ -1,0 +1,57 @@
+/* ── Nura layout shells ──
+   Mobile (<768): the chat is fixed between the app top bar and tab bar (heights published by PatientLayout).
+   Tablet (768–1023): single pane inside the sidebar layout, sized to the viewport.
+   Desktop (≥1024): two-pane messenger; only the panes scroll, never the page. */
+
+.mobileShell {
+  position: fixed;
+  top: var(--app-header-h, 56px);
+  bottom: var(--app-tabbar-h, 64px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+@media (min-width: 768px) {
+  .mobileShell {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    /* main container adds 20px top + bottom padding at this width */
+    height: calc(100dvh - 2 * var(--sp-5));
+    min-height: 480px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+  }
+}
+
+.split {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  /* main container adds 24px top + 32px bottom padding on desktop */
+  height: calc(100dvh - var(--sp-6) - var(--sp-8));
+  min-height: 520px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.listPane {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.chatPane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}

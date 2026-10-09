@@ -1,15 +1,31 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Plus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getMyOrganizations } from '../../services/api';
-import Spinner from '../../components/Spinner';
+import { Button, Card, ErrorState, PageHeader, SectionHeader, Skeleton } from '../../components/ui';
+import PortalShell from '../../components/portal/PortalShell';
+import friendlyError from '../../utils/friendlyError';
 import OrgCard from './OrgCard';
 import OrgRegisterForm from './OrgRegisterForm';
 import styles from './OrgDashboard.module.css';
 
+function LoadingCards() {
+  return (
+    <div className={styles.stack} role="status" aria-label="Loading your facilities">
+      {[0, 1].map((i) => (
+        <Card key={i} padding="lg" className={styles.skeletonCard}>
+          <Skeleton width="45%" height={20} />
+          <Skeleton width="70%" height={14} />
+          <Skeleton height={56} radius={12} />
+          <Skeleton height={120} radius={12} />
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 export default function OrgDashboard() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const [orgs, setOrgs] = useState(null); // null while loading
   const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -19,7 +35,7 @@ export default function OrgDashboard() {
     let cancelled = false;
     getMyOrganizations()
       .then((res) => { if (!cancelled) setOrgs(res.data); })
-      .catch((err) => { if (!cancelled) setLoadError(err.message); });
+      .catch((err) => { if (!cancelled) setLoadError(friendlyError(err, 'We could not load your facilities.')); });
     return () => { cancelled = true; };
   }, [reloadKey]);
 
@@ -38,73 +54,45 @@ export default function OrgDashboard() {
     setShowForm(false);
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login', { replace: true });
-  };
-
   const loading = orgs === null && !loadError;
   const noOrgs = orgs !== null && orgs.length === 0;
+  const firstName = (user?.name || '').trim().split(/\s+/)[0] || 'there';
 
   return (
-    <div className={styles.page}>
-      <header className={styles.topbar}>
-        <div className={styles.topbarInner}>
-          <div className={styles.brand}>
-            <img src="/logo.jpg" alt="" width="36" height="36" className={styles.logo} />
-            <div>
-              <span className={styles.brandName}>MediGuide</span>
-              <span className={styles.brandSub}>Organization portal</span>
-            </div>
-          </div>
-          <div className={styles.userBox}>
-            <span className={styles.userName}>{user?.name}</span>
-            <button type="button" className={styles.btnLogout} onClick={handleLogout}>Log out</button>
-          </div>
+    <PortalShell portalName="Organization portal">
+      <PageHeader
+        title={`Welcome, ${firstName}`}
+        subtitle="Register your facility, then add your doctors. Once an administrator approves it, patients can book your staff on MediGuide."
+      />
+
+      {loading && <LoadingCards />}
+
+      {loadError && (
+        <Card>
+          <ErrorState message={loadError} onRetry={retry} />
+        </Card>
+      )}
+
+      {orgs !== null && (
+        <div className={styles.stack}>
+          {(noOrgs || showForm) ? (
+            <OrgRegisterForm
+              defaultEmail={user?.email}
+              onCreated={onCreated}
+              onCancel={noOrgs ? null : () => setShowForm(false)}
+              first={noOrgs}
+            />
+          ) : (
+            <SectionHeader
+              title={`Your facilities (${orgs.length})`}
+              action={<Button variant="secondary" size="sm" icon={Plus} onClick={() => setShowForm(true)}>Add facility</Button>}
+              className={styles.sectionHeader}
+            />
+          )}
+
+          {orgs.map((org) => <OrgCard key={org.id} org={org} onChange={replaceOrg} />)}
         </div>
-      </header>
-
-      <main className={styles.main}>
-        <section className={styles.intro}>
-          <h1 className={styles.pageTitle}>Welcome, {user?.name || 'there'}</h1>
-          <p className={styles.muted}>
-            Register your facility, then add your doctors. Once an administrator approves your facility, your staff become
-            bookable by patients on MediGuide.
-          </p>
-        </section>
-
-        {loading && (
-          <div className={styles.center} role="status" aria-label="Loading your facilities">
-            <Spinner size="lg" />
-          </div>
-        )}
-
-        {loadError && (
-          <div className={styles.errorCard} role="alert">
-            <p>{loadError}</p>
-            <button type="button" className={styles.btnPrimary} onClick={retry}>Try again</button>
-          </div>
-        )}
-
-        {orgs !== null && (
-          <>
-            {(noOrgs || showForm) ? (
-              <OrgRegisterForm
-                defaultEmail={user?.email}
-                onCreated={onCreated}
-                onCancel={noOrgs ? null : () => setShowForm(false)}
-              />
-            ) : (
-              <div className={styles.toolbar}>
-                <h2 className={styles.sectionHeading}>Your facilities</h2>
-                <button type="button" className={styles.btnOutline} onClick={() => setShowForm(true)}>+ Add another facility</button>
-              </div>
-            )}
-
-            {orgs.map((org) => <OrgCard key={org.id} org={org} onChange={replaceOrg} />)}
-          </>
-        )}
-      </main>
-    </div>
+      )}
+    </PortalShell>
   );
 }

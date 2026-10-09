@@ -1,21 +1,18 @@
 import styles from './Spinner.module.css';
 
-function Spinner({ size = 'md', className = '' }) {
+// size: sm | md | lg. Small spinners inherit the text colour (e.g. inside buttons) and are
+// hidden from screen readers; the large page loader is brand-coloured and announced.
+function Spinner({ size = 'md', className = '', label = 'Loading' }) {
   const sizeClass = styles[size] || styles.md;
-
   return (
-    <svg
+    <span
       className={`${styles.spinner} ${sizeClass} ${className}`}
-      fill="none"
-      viewBox="0 0 24 24"
+      role={size === 'lg' ? 'status' : undefined}
+      aria-label={size === 'lg' ? label : undefined}
+      aria-hidden={size === 'lg' ? undefined : true}
     >
-      <circle className={styles.circle} cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path
-        className={styles.path}
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-      />
-    </svg>
+      <span className={styles.ring} aria-hidden="true" />
+    </span>
   );
 }
 

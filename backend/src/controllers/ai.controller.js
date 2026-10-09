@@ -1,4 +1,5 @@
 const { GoogleGenAI } = require('@google/genai');
+const nura = require('../services/nura');
 
 // Emergency keywords list (includes common misspellings, concatenated words, and severe triggers)
 const EMERGENCY_KEYWORDS = [
@@ -10,14 +11,45 @@ const EMERGENCY_KEYWORDS = [
 
 // Word-boundary match so e.g. "die" does not fire on "diet"
 const EMERGENCY_REGEX = new RegExp(`\\b(${EMERGENCY_KEYWORDS.join('|')})\\b`, 'i');
-const hasEmergencyKeyword = (text) => EMERGENCY_REGEX.test(text || '');
+// Temperature mentioned with "fever"/"temperature" (e.g. "fever of 102", "39.5 c temp"), else null
+const feverValue = (t) => {
+  if (!/\b(fever|temperature|temp)\b/.test(t)) return null;
+  const m = t.match(/\b(1\d{2}(?:\.\d)?|[34]\d(?:\.\d)?)\s*(?:°|degrees?)?\s*[fc]?\b/);
+  return m ? parseFloat(m[1]) : null;
+};
+
+// Red-flag combinations that single keywords miss
+const RED_FLAG_COMBOS = [
+  // Meningitis signs: stiff neck with fever, headache, rash or light sensitivity
+  (t) => /\bstiff (neck|necked)\b|\bneck (is )?stiff\b/.test(t) && /\b(fever|temperature|headache|rash|light hurts|sensitive to light)\b/.test(t),
+  // Thunderclap headache
+  (t) => /\b(worst headache|sudden (severe|bad|intense) headache|thunderclap)\b/.test(t),
+  // Very high fever (>= 104 F / 40 C)
+  (t) => {
+    const v = feverValue(t);
+    return v !== null && (v >= 104 || (v >= 40 && v < 45));
+  },
+  (t) => /\b(can'?t|cannot|unable to) breathe\b|\blips (are |turning )?blue\b/.test(t),
+  (t) => /\b(baby|infant|newborn)\b/.test(t) && /\b(fever|not feeding|floppy|limp)\b/.test(t)
+];
+const hasEmergencyKeyword = (text) => {
+  const t = (text || '').toLowerCase();
+  return EMERGENCY_REGEX.test(t) || RED_FLAG_COMBOS.some((test) => test(t));
+};
+// Fever of 102 F / 38.9 C or more, or lasting several days: see a doctor
+const isSignificantFever = (t) => {
+  const v = feverValue(t);
+  const high = v !== null && (v >= 102 || (v >= 38.9 && v < 45));
+  return high || /fever.*\b(3|three|4|four|5|five|several) days\b|\b(3|three|4|four|several) days?\b.*fever/.test(t);
+};
 
 const MEDICAL_KEYWORDS = [
   'pain', 'fever', 'headache', 'rash', 'cough', 'stomach', 'chest', 'breath',
   'bleed', 'sick', 'nausea', 'vomit', 'dizzy', 'hurt', 'swollen', 'throat',
   'cold', 'flu', 'cramps', 'itch', 'infection', 'allergy', 'medication', 'doctor',
   'hospital', 'symptom', 'pregnant', 'blood', 'tired', 'fatigue', 'sprain', 'injury',
-  'heart', 'attack', 'heartattack', 'stomachache', 'headache', 'backache', 'sore'
+  'heart', 'attack', 'heartattack', 'stomachache', 'headache', 'backache', 'sore',
+  'temperature', 'temp', 'stiff', 'neck', 'ache', 'aching', 'swelling', 'burn', 'cut', 'wound'
 ];
 
 // Helper to identify greetings, follow-ups, and symptom inputs
@@ -88,7 +120,7 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
       hospital_recommendation: 'HOSPITAL VISIT STRONGLY URGED (Emergency Care Required)',
       show_map: true,
       profile_impact_summary: `${isPregnant ? `Pregnancy (${profile.pregnancyStatus}). ` : ''}${chronic ? `Conditions: ${chronic}.` : 'Emergency evaluation needed.'}`,
-      conversational_response: `🚨 **EMERGENCY WARNING: Immediate Medical Care Required**\n\nBased on your description ("${symptomText}"), these symptoms carry severe cardiovascular or respiratory risks. Please do NOT wait or rest at home. Call emergency services (1122) or go to the nearest Emergency Department immediately.\n\nWhile help is on the way, sit upright, avoid physical exertion, and unbutton tight clothing.`,
+      conversational_response: `**EMERGENCY WARNING: Immediate Medical Care Required**\n\nBased on your description ("${symptomText}"), these can be signs of a serious condition that needs urgent assessment. Please do **not** wait or rest at home. Call emergency services (**1122**) or go to the nearest Emergency Department now.\n\nWhile help is on the way, stay with someone, avoid eating or driving, and keep your phone close.`,
       trigger_question: 'Is someone with you right now, or do you need emergency dispatch immediately?',
       precautionary_advice: 'Call emergency services (1122) or head to the nearest Emergency Room without delay.',
       emergency_flag: true
@@ -105,7 +137,7 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
       hospital_recommendation: '',
       show_map: false,
       profile_impact_summary: '',
-      conversational_response: `Hello! I am your MediGuide AI Health Counselor. I am here to help evaluate your symptoms and guide your care choices.\n\nWhat physical symptoms or health concerns are you experiencing today? Please tell me what's going on so I can assist you!`,
+      conversational_response: `Hi, I'm Nura, your MediGuide health assistant.\n\nWhat physical symptoms or health concerns are you experiencing today? Please tell me what's going on so I can assist you!`,
       trigger_question: 'What symptoms or health concerns are you experiencing right now?',
       precautionary_advice: '',
       emergency_flag: false
@@ -122,7 +154,7 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
       hospital_recommendation: '',
       show_map: false,
       profile_impact_summary: '',
-      conversational_response: `I am your MediGuide AI Health Counselor. Please keep our conversation focused on your physical symptoms, health concerns, or medical profile.\n\nHow are you feeling physically right now?`,
+      conversational_response: `I'm Nura, and I'm best with health topics.\n\nHow are you feeling physically right now?`,
       trigger_question: 'Are you experiencing any discomfort or physical symptoms right now?',
       precautionary_advice: '',
       emergency_flag: false
@@ -165,17 +197,17 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
 
   // 5. Specialty routing, with severity escalating to a clinic visit
   const allergies = (profile.allergies || []).join(' ').toLowerCase();
-  const isSevere = /\b(severe|severely|worst|unbearable|intense|persistent|won'?t stop|for (a )?week|blood|bloody|vomiting|high fever)\b/i.test(lower);
+  const isSevere = /\b(severe|severely|worst|unbearable|intense|persistent|won'?t stop|for (a )?week|blood|bloody|vomiting|high fever)\b/i.test(lower) || isSignificantFever(lower);
   const specialtyRoutes = [
     { test: /\b(rash|itch\w*|skin|acne|eczema|hives|mole)\b/, specialty: 'Dermatologist', category: 'Skin symptom' },
     { test: /\b(stomach\w*|abdomen|abdominal|vomit\w*|diarrh\w*|nausea|constipat\w*|acid|heartburn)\b/, specialty: 'Gastroenterologist', category: 'Digestive symptom' },
-    { test: /\b(joint|knee|back ?pain|backache|sprain\w*|fracture|bone|shoulder)\b/, specialty: 'Orthopedist', category: 'Muscle / joint symptom' }
+    { test: /\b(joint|knee|back ?pain|backache|sprain\w*|fracture|bone|shoulder|neck|stiff\w*|muscle\w*|ankle|wrist|hip)\b/, specialty: 'Orthopedist', category: 'Muscle / joint symptom' }
   ];
   const route = specialtyRoutes.find((r) => r.test.test(lower));
 
   if (route || isSevere) {
     const specialty = route ? route.specialty : 'General Physician';
-    const profileNote = `Profile check: ${allergies ? `Allergies: ${allergies}.` : 'No drug allergies reported.'}${isPregnant ? ` Pregnancy (${profile.pregnancyStatus}).` : ''}`;
+    const profileNote = `${allergies ? `Allergies: ${allergies}.` : 'No drug allergies reported.'}${isPregnant ? ` Pregnancy (${profile.pregnancyStatus}).` : ''}`;
     if (isSevere || isPregnant) {
       return {
         is_non_medical: false,
@@ -185,7 +217,7 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
         hospital_recommendation: 'CLINIC VISIT RECOMMENDED',
         show_map: true,
         profile_impact_summary: profileNote,
-        conversational_response: `🩺 **Clinic Visit Recommended**\n\nWhat you describe sounds more than mild, so please see a **${specialty}** within the next day rather than waiting it out at home.\n\n**Go to an emergency department now** if you notice vomiting blood, black stools, fainting, severe dehydration, or pain that becomes unbearable.`,
+        conversational_response: `**Clinic Visit Recommended**\n\nWhat you describe sounds more than mild, so please see a **${specialty}** within the next day rather than waiting it out at home.\n\n**Go to an emergency department now** if you notice vomiting blood, black stools, fainting, severe dehydration, or pain that becomes unbearable.`,
         trigger_question: 'On a scale of 1-10, how bad is it right now, and when did it start?',
         precautionary_advice: 'Stay hydrated, avoid self-medicating beyond basic pain relief, and arrange a doctor visit soon.',
         emergency_flag: false
@@ -199,7 +231,7 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
       hospital_recommendation: 'HOME CARE FIRST (Clinic Visit Optional)',
       show_map: false,
       profile_impact_summary: profileNote,
-      conversational_response: `😊 **Home Care First**\n\nThis sounds mild for now. Rest, stay hydrated and watch how it develops over the next day or two.\n\nIf it lasts more than a few days or gets worse, book a **${specialty}**. Seek urgent care for spreading swelling, high fever, or severe pain.`,
+      conversational_response: `**Home Care First**\n\nThis sounds mild for now. Rest, stay hydrated and watch how it develops over the next day or two.\n\nIf it lasts more than a few days or gets worse, book a **${specialty}**. Seek urgent care for spreading swelling, high fever, or severe pain.`,
       trigger_question: 'How long have you had this, and is it getting better or worse?',
       precautionary_advice: 'Rest, stay hydrated and monitor your symptoms.',
       emergency_flag: false
@@ -214,12 +246,12 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
     return {
       is_non_medical: false,
       category: 'Routine Symptom Cluster',
-      specialty: 'Self-Care Monitoring',
+      specialty: '',
       urgency_level: 'low',
       hospital_recommendation: 'NO HOSPITAL VISIT NEEDED (Safe for Home Care)',
       show_map: false,
-      profile_impact_summary: `Profile check: ${allergies ? `Allergies: ${allergies}.` : 'No conflicting drug allergies reported.'}`,
-      conversational_response: `😊 **No Hospital Visit Needed**\n\nBased on your description, this appears to be a routine symptom. You do **not** need to go to a clinic or hospital right now.\n\n**Home Instructions**: Rest well, stay hydrated, and monitor your symptoms.\n**When to Seek Care**: If you develop high fever, chest pain, difficulty breathing, or severe sudden pain, update me or seek medical evaluation immediately.`,
+      profile_impact_summary: `${allergies ? `Allergies: ${allergies}.` : 'No conflicting drug allergies reported.'}`,
+      conversational_response: `**No Hospital Visit Needed**\n\nBased on your description, this appears to be a routine symptom. You do **not** need to go to a clinic or hospital right now.\n\n**Home Instructions**: Rest well, stay hydrated, and monitor your symptoms.\n**When to Seek Care**: If you develop high fever, chest pain, difficulty breathing, or severe sudden pain, update me or seek medical evaluation immediately.`,
       trigger_question: 'How long have you felt this way, and are you experiencing any fever or other symptoms?',
       precautionary_advice: 'Rest well and stay hydrated.',
       emergency_flag: false
@@ -234,181 +266,145 @@ const evaluateLocalTriage = (symptomText, profile = {}, messages = []) => {
     urgency_level: 'low',
     hospital_recommendation: 'HOME CARE FIRST (Clinic Visit Optional)',
     show_map: false,
-    profile_impact_summary: `Profile check: ${profile.gender || 'Patient'}, ${chronic ? `Conditions: ${chronic}` : 'No chronic illnesses.'}`,
-    conversational_response: `🩺 **Home Care First**\n\nThere is no immediate need for a hospital trip. Resting at home is reasonable.\n\n**Warning**: If your condition worsens significantly or you experience breathing trouble or chest pain, please seek prompt medical care.`,
+    profile_impact_summary: `${profile.gender || 'Patient'}, ${chronic ? `Conditions: ${chronic}` : 'No chronic illnesses.'}`,
+    conversational_response: `**Home Care First**\n\nThere is no immediate need for a hospital trip. Resting at home is reasonable.\n\n**Warning**: If your condition worsens significantly or you experience breathing trouble or chest pain, please seek prompt medical care.`,
     trigger_question: 'How many days have you experienced this, and are there any other symptoms?',
     precautionary_advice: 'Rest adequately and drink plenty of fluids.',
     emergency_flag: false
   };
 };
 
-// @desc    Deep Clinical Triage & Dynamic Opinion Engine with Gemini AI
+// @desc    Chat with Nura: conversational health assistant + clinical triage
 // @route   POST /api/ai/triage
 // @access  Private
 exports.evaluateTriageWithAI = async (req, res) => {
+  const symptomText = typeof req.body.symptomText === 'string' ? req.body.symptomText.trim().slice(0, 2000) : '';
+  if (!symptomText) {
+    return res.status(400).json({ success: false, message: 'Please type a message for Nura.' });
+  }
+
+  // Use the stored medical profile, never one supplied by the client; keep the last 12 turns only
+  const patientProfile = req.user.medicalProfile ? req.user.medicalProfile.toObject() : {};
+  const chatHistory = (Array.isArray(req.body.chatHistory) ? req.body.chatHistory : [])
+    .slice(-12)
+    .map((m) => ({ sender: m && m.sender === 'user' ? 'user' : 'ai', text: String((m && m.text) || '').slice(0, 1500) }));
+  const user = { name: req.user.name, medicalProfile: patientProfile };
+
+  const send = (source, data) => res.status(200).json({
+    success: true,
+    source,
+    data: { suggested_replies: [], cta: null, ...data }
+  });
+
+  const intent = nura.detectIntent(symptomText);
+
+  // Safety first: crisis and red-flag symptoms are always answered locally and immediately
+  if (intent.type === 'crisis') return send('nura_safety', nura.conversationalReply(intent, symptomText, user));
+  if (hasEmergencyKeyword(symptomText)) {
+    return send('nura_safety', {
+      ...evaluateLocalTriage(symptomText, patientProfile, chatHistory),
+      suggested_replies: ['Show me the nearest hospital', 'Call my emergency contact']
+    });
+  }
+  // Greetings never need the model
+  if (intent.type === 'greeting' || intent.type === 'thanks') {
+    return send('nura_local', nura.conversationalReply(intent, symptomText, user));
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  const localAnswer = () => {
+    const conversational = nura.conversationalReply(intent, symptomText, user);
+    if (conversational) return conversational;
+    const inputType = categorizeInput(symptomText, chatHistory);
+    if (inputType === 'off_topic') return nura.otherReply();
+    return {
+      ...evaluateLocalTriage(symptomText, patientProfile, chatHistory),
+      suggested_replies: ['It started today', 'It has lasted a few days', 'It is getting worse']
+    };
+  };
+
+  if (!apiKey || apiKey === 'your_gemini_api_key_here') {
+    return send('nura_local', localAnswer());
+  }
+
   try {
-    const symptomText = typeof req.body.symptomText === 'string' ? req.body.symptomText.trim().slice(0, 2000) : '';
-    if (!symptomText) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide symptom text to analyze.'
-      });
-    }
-
-    // Use the stored medical profile, never one supplied by the client; keep the last 12 turns only
-    const patientProfile = req.user.medicalProfile ? req.user.medicalProfile.toObject() : {};
-    const chatHistory = (Array.isArray(req.body.chatHistory) ? req.body.chatHistory : [])
-      .slice(-12)
-      .map((m) => ({ sender: m && m.sender === 'user' ? 'user' : 'ai', text: String((m && m.text) || '').slice(0, 1500) }));
-
-    const inputType = categorizeInput(symptomText, chatHistory || []);
-
-    // 1. Warm Greeting Handling
-    if (inputType === 'greeting') {
-      return res.status(200).json({
-        success: true,
-        source: 'greeting_handler',
-        data: {
-          is_non_medical: true,
-          category: 'Health Counseling',
-          specialty: '',
-          urgency_level: 'none',
-          hospital_recommendation: '',
-          show_map: false,
-          profile_impact_summary: '',
-          conversational_response: `Hello! I am your MediGuide AI Health Counselor. I am here to help evaluate your symptoms and guide your health decisions.\n\nAre you experiencing any physical symptoms, pain, or health concerns today? Please describe what's going on so I can assist you!`,
-          trigger_question: 'What symptoms or health concerns are you experiencing right now?',
-          precautionary_advice: '',
-          emergency_flag: false
-        }
-      });
-    }
-
-    // 2. Off-Topic Out of Context Handling
-    if (inputType === 'off_topic') {
-      return res.status(200).json({
-        success: true,
-        source: 'context_filter',
-        data: {
-          is_non_medical: true,
-          category: 'Out of Context',
-          specialty: '',
-          urgency_level: 'none',
-          hospital_recommendation: '',
-          show_map: false,
-          profile_impact_summary: '',
-          conversational_response: `I am your MediGuide AI Health Counselor. Please keep our conversation focused on your physical symptoms, health concerns, or medical profile so I can provide relevant guidance.\n\nWhat physical symptoms or health questions would you like to discuss today?`,
-          trigger_question: 'Are you experiencing any physical discomfort or symptoms right now?',
-          precautionary_advice: '',
-          emergency_flag: false
-        }
-      });
-    }
-
-    const apiKey = process.env.GEMINI_API_KEY;
-
-    if (!apiKey || apiKey === 'your_gemini_api_key_here') {
-      const localResult = evaluateLocalTriage(symptomText, patientProfile || {}, chatHistory || []);
-      return res.status(200).json({
-        success: true,
-        source: 'local_ai_engine',
-        data: localResult
-      });
-    }
-
     const ai = new GoogleGenAI({ apiKey });
 
     const systemInstruction = `
-You are MediGuide's Lead AI Health Counselor.
+You are Nura, MediGuide's warm, professional AI health assistant, chatting with a patient in Pakistan.
 
-DYNAMIC OPINION SWITCHING & CLINICAL TRIAGE INSTRUCTIONS:
-1. RE-EVALUATE URGENCY ON EVERY TURN:
-   - You MUST dynamically re-assess the patient's condition on EVERY single message in the conversation.
-   - You MUST HAVE THE ABILITY TO CHANGE YOUR OPINION IN THE SAME CHAT THREAD!
-   - If a patient previously reported mild symptoms (e.g. routine headache, mild fatigue), but NOW reports a severe or emergency symptom (such as "I'm having a heart attack", "chest pain", "shortness of breath", "severe bleeding", "sudden paralysis", "fainting"), YOU MUST INSTANTLY CHANGE YOUR OPINION!
-   - Instantly elevate "urgency_level" to "high", set "hospital_recommendation": "HOSPITAL VISIT STRONGLY URGED (Emergency Care Required)", set "show_map": true, set "emergency_flag": true, and warn the patient clearly that immediate emergency care is required.
+WHAT YOU DO
+- Hold a natural health conversation: symptoms, general health questions, medications (general info only),
+  wellness (sleep, stress, nutrition, hydration, exercise, weight), explaining medical terms, and helping the
+  patient decide where to get care (home care, clinic, or emergency).
+- Use the patient's medical profile (allergies, conditions, medications, pregnancy, age) to personalise advice,
+  and point out conflicts (e.g. a medicine they are allergic to).
+- Ask one focused follow-up question when you need more detail (onset, severity 1-10, duration, other symptoms).
 
-2. CLEAR INSTRUCTIONS & WARNINGS:
-   - Provide clear home care instructions and specify warning signs ONLY when home care is safe.
-   - Warn and instruct a hospital/clinic visit ONLY if a visit is clinically needed based on risk.
+SAFETY RULES
+- Never give a diagnosis as fact, never prescribe or set doses. Recommend the right specialist instead.
+- Re-assess urgency on EVERY message. If red-flag symptoms appear (chest pain, severe breathlessness, stroke
+  signs, heavy bleeding, fainting, seizures, poisoning, suicidal thoughts), set urgency_level "high",
+  emergency_flag true, show_map true, and tell them to call 1122 or go to the nearest emergency department.
+- Keep replies concise (under ~150 words), friendly and clear. Use **bold** for key points and "• " bullets.
+  No emojis.
+- If the message is unrelated to health, set is_non_medical true and gently steer back to health topics.
 
-3. OUT-OF-CONTEXT REMINDERS:
-   If the user's message is off-topic (math, trivia, unrelated chatter), set "is_non_medical": true and gently remind them to stay focused on physical health symptoms.
-
-Respond strictly in valid JSON matching this schema:
+Respond ONLY with valid JSON matching this schema:
 {
-  "is_non_medical": true | false,
-  "category": "Short description of symptom area or dialog state",
-  "specialty": "Recommended Doctor Specialist or empty if N/A",
+  "is_non_medical": boolean,
+  "category": "short topic label",
+  "specialty": "recommended doctor specialty, or empty",
   "urgency_level": "high | medium | low | none",
-  "hospital_recommendation": "HOSPITAL VISIT STRONGLY URGED (Emergency Care Required) | CLINIC VISIT RECOMMENDED | NO HOSPITAL VISIT NEEDED (Safe for Home Care) | empty if N/A",
-  "show_map": true | false,
-  "profile_impact_summary": "Summary of patient health background impact or empty",
-  "conversational_response": "Proactive, empathetic response with clear clinical guidance and warnings",
-  "trigger_question": "Targeted clinical follow-up question regarding symptoms, onset, or severity",
-  "precautionary_advice": "Safe home self-care guidance or warning instructions",
-  "emergency_flag": true | false
+  "hospital_recommendation": "HOSPITAL VISIT STRONGLY URGED (Emergency Care Required) | CLINIC VISIT RECOMMENDED | HOME CARE FIRST (Clinic Visit Optional) | NO HOSPITAL VISIT NEEDED (Safe for Home Care) | empty",
+  "show_map": boolean,
+  "profile_impact_summary": "how the patient's profile affects this advice, or empty",
+  "conversational_response": "your reply to the patient",
+  "trigger_question": "one follow-up question, or empty",
+  "precautionary_advice": "short safety/self-care advice, or empty",
+  "emergency_flag": boolean,
+  "suggested_replies": ["2-3 short replies the patient might tap next"]
 }
 `;
 
-    const historyFormatted = (chatHistory || [])
-      .map(m => `${m.sender === 'user' ? 'Patient' : 'AI Counselor'}: ${m.text}`)
+    const historyFormatted = chatHistory
+      .map((m) => `${m.sender === 'user' ? 'Patient' : 'Nura'}: ${m.text}`)
       .join('\n');
 
+    const meds = (patientProfile.currentMedications || []).map((m) => (typeof m === 'string' ? m : m.name)).filter(Boolean);
     const promptText = `
-PATIENT MEDICAL PROFILE:
-- Gender: ${patientProfile?.gender || 'Not specified'}
-- Date of Birth / Age: ${patientProfile?.dateOfBirth || 'Not specified'}
-- Pregnancy Status: ${patientProfile?.pregnancyStatus || 'N/A'}
-- Allergies: ${patientProfile?.allergies?.join(', ') || 'None'}
-- Chronic Conditions: ${patientProfile?.preExistingConditions?.join(', ') || 'None'}
-- Medications: ${patientProfile?.currentMedications?.map(m => `${typeof m === 'string' ? m : m.name}`).join(', ') || 'None'}
+PATIENT
+- Name: ${req.user.name || 'Not specified'}
+- Gender: ${patientProfile.gender || 'Not specified'}
+- Date of birth: ${patientProfile.dateOfBirth || 'Not specified'}
+- Height / weight: ${patientProfile.height ? `${patientProfile.height} cm` : '?'} / ${patientProfile.weight ? `${patientProfile.weight} kg` : '?'}
+- Pregnancy status: ${patientProfile.pregnancyStatus || 'N/A'}
+- Allergies: ${(patientProfile.allergies || []).join(', ') || 'None recorded'}
+- Conditions: ${(patientProfile.preExistingConditions || []).join(', ') || 'None recorded'}
+- Medications: ${meds.join(', ') || 'None recorded'}
 
-CONVERSATION HISTORY:
-${historyFormatted || 'Start of new consultation'}
+CONVERSATION SO FAR
+${historyFormatted || '(new conversation)'}
 
-CURRENT PATIENT MESSAGE:
+PATIENT'S NEW MESSAGE
 "${symptomText}"
 `;
 
     const response = await Promise.race([
       ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        config: {
-          systemInstruction,
-          responseMimeType: 'application/json'
-        },
+        config: { systemInstruction, responseMimeType: 'application/json' },
         contents: [promptText]
       }),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Gemini request timed out')), 12000))
     ]);
 
-    const resultJson = JSON.parse(response.text);
-
-    // Safety net: if red-flag symptoms are present the answer is always an emergency,
-    // whatever the model said.
-    if (hasEmergencyKeyword(symptomText) && !resultJson.emergency_flag) {
-      Object.assign(resultJson, evaluateLocalTriage(symptomText, patientProfile, chatHistory));
-    }
-
-    return res.status(200).json({
-      success: true,
-      source: 'gemini_ai',
-      data: resultJson
-    });
-
+    const result = JSON.parse(response.text);
+    if (!Array.isArray(result.suggested_replies)) result.suggested_replies = [];
+    result.suggested_replies = result.suggested_replies.slice(0, 3).map(String);
+    return send('gemini_ai', result);
   } catch (error) {
-    console.error('Gemini AI Triage Error:', error);
-    const fallbackResult = evaluateLocalTriage(
-      String(req.body.symptomText || '').slice(0, 2000),
-      req.user && req.user.medicalProfile ? req.user.medicalProfile.toObject() : {},
-      []
-    );
-    return res.status(200).json({
-      success: true,
-      source: 'fallback_ai_engine',
-      data: fallbackResult
-    });
+    console.error('Gemini error, using local engine:', error.message);
+    return send('nura_local', localAnswer());
   }
 };
-

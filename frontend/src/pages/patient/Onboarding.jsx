@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
+import { MessageCircle, MapPin, CalendarCheck, Siren, Mic, AlertCircle, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import Spinner from '../../components/Spinner';
+import { Button, Badge, Alert, ProgressBar, Logo } from '../../components/ui';
+import Nura from '../../components/nura/Nura';
+import friendlyError from '../../utils/friendlyError';
 import { TextField, SelectField, TagInput, MedicationsEditor } from './profile/FormKit';
 import {
   BLOOD_GROUPS, GENDERS, PREGNANCY_OPTIONS, LIMITS,
   draftFromUser, payloadFromDraft, validateDraft, todayISO
 } from './profile/profileModel';
 import styles from './Onboarding.module.css';
+
+const FEATURES = [
+  { icon: MessageCircle, title: 'Ask Nura', text: 'Describe how you feel and get clear next steps.' },
+  { icon: MapPin, title: 'Nearby care', text: 'Find hospitals and clinics close to you.' },
+  { icon: CalendarCheck, title: 'Doctor sessions', text: 'Book available appointments in a few taps.' },
+  { icon: Siren, title: 'Emergency info', text: 'Keep key medical details and a contact ready.' }
+];
 
 const STEPS = ['welcome', 'about', 'health', 'contact', 'permissions', 'done'];
 const STEP_FIELDS = {
@@ -54,27 +64,27 @@ async function requestMicrophone() {
   }
 }
 
-function PermissionRow({ title, description, status, onRequest, icon }) {
+const PERM_TONE = { granted: 'success', denied: 'danger', unsupported: 'neutral', nodevice: 'neutral', unavailable: 'warning', asking: 'info' };
+const PERM_SHORT = { granted: 'Allowed', denied: 'Blocked', unsupported: 'Not supported', nodevice: 'No microphone', unavailable: 'Allowed', asking: 'Waiting' };
+
+function PermissionRow({ title, description, status, onRequest, icon: Icon }) {
   const busy = status === 'asking';
   const good = status === 'granted';
-  const bad = status === 'denied' || status === 'unsupported' || status === 'nodevice';
   return (
     <div className={styles.permRow}>
-      <div className={styles.permIcon} aria-hidden="true">{icon}</div>
+      <span className={styles.permIcon} aria-hidden="true"><Icon size={20} /></span>
       <div className={styles.permBody}>
-        <p className={styles.permTitle}>{title}</p>
+        <div className={styles.permTitleRow}>
+          <p className={styles.permTitle}>{title}</p>
+          {status !== 'idle' && <Badge tone={PERM_TONE[status]}>{PERM_SHORT[status]}</Badge>}
+        </div>
         <p className={styles.permDesc}>{description}</p>
-        <p
-          className={`${styles.permStatus} ${good ? styles.permGood : ''} ${bad ? styles.permBad : ''}`}
-          role="status"
-        >
-          {PERM_LABELS[status]}
-        </p>
+        <p className={styles.permStatus} role="status">{status !== 'granted' && status !== 'asking' ? PERM_LABELS[status] : ''}</p>
       </div>
       {!good && (
-        <button type="button" className={styles.permBtn} onClick={onRequest} disabled={busy}>
-          {busy ? <Spinner size="sm" /> : status === 'idle' ? 'Allow' : 'Try again'}
-        </button>
+        <Button variant="secondary" size="sm" onClick={onRequest} loading={busy} className={styles.permBtn}>
+          {status === 'idle' || busy ? 'Allow' : 'Try again'}
+        </Button>
       )}
     </div>
   );
@@ -115,7 +125,7 @@ export default function Onboarding() {
       await updateProfile({ ...payloadFromDraft(data, { includeName: false }), onboardingCompleted: true });
       navigate('/patient/home', { replace: true });
     } catch (e) {
-      setSaveError(e.message || 'Could not save your profile. Please try again.');
+      setSaveError(friendlyError(e, 'We could not save your profile. Please try again.'));
       setSaving(false);
     }
   };
@@ -164,52 +174,47 @@ export default function Onboarding() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.card}>
+      <div className={styles.shell}>
         <header className={styles.header}>
           <div className={styles.headerTop}>
-            <span className={styles.brand}>
-              <img src="/logo.jpg" alt="" className={styles.logo} />
-              MediGuide
-            </span>
+            <Logo size={28} />
             <span className={styles.stepCount}>Step {step + 1} of {STEPS.length}</span>
           </div>
-          <div
-            className={styles.progress}
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={progress}
-            aria-label="Setup progress"
-          >
-            <div className={styles.progressFill} style={{ width: `${progress}%` }} />
-          </div>
+          <ProgressBar value={progress} label="Setup progress" />
         </header>
 
         <main className={styles.body}>
           {stepKey === 'welcome' && (
-            <section>
-              <div className={styles.heroIcon} aria-hidden="true">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z" /></svg>
+            <section className={styles.stack}>
+              <div className={styles.nuraHero}><Nura size={96} mood="happy" /></div>
+              <div>
+                <h1 ref={headingRef} tabIndex={-1} className={styles.title}>Hi {firstName}, I&apos;m Nura</h1>
+                <p className={styles.lead}>
+                  I&apos;ll help you understand symptoms, find nearby care and book doctors.
+                  A minute of setup makes my guidance more relevant to you.
+                </p>
               </div>
-              <h1 ref={headingRef} tabIndex={-1} className={styles.title}>Welcome, {firstName}</h1>
-              <p className={styles.lead}>
-                MediGuide helps you understand your symptoms, find nearby care and book doctor sessions.
-                A minute of setup makes the guidance more relevant to you.
-              </p>
               <ul className={styles.featureList}>
-                <li><strong>Symptom check.</strong> Describe how you feel and get guided next steps.</li>
-                <li><strong>Nearby care.</strong> Find hospitals and clinics close to you.</li>
-                <li><strong>Doctor sessions.</strong> Book available appointments.</li>
-                <li><strong>Emergency info.</strong> Keep your key medical details and a contact ready.</li>
+                {FEATURES.map(({ icon: Icon, title, text }) => (
+                  <li key={title} className={styles.feature}>
+                    <span className={styles.featureIcon} aria-hidden="true"><Icon size={18} /></span>
+                    <span>
+                      <span className={styles.featureTitle}>{title}</span>
+                      <span className={styles.featureText}>{text}</span>
+                    </span>
+                  </li>
+                ))}
               </ul>
               <p className={styles.note}>Everything is optional and you can edit it any time from your profile.</p>
             </section>
           )}
 
           {stepKey === 'about' && (
-            <section className={styles.form}>
-              <h1 ref={headingRef} tabIndex={-1} className={styles.title}>About you</h1>
-              <p className={styles.lead}>These details help tailor health guidance.</p>
+            <section className={styles.stack}>
+              <div>
+                <h1 ref={headingRef} tabIndex={-1} className={styles.title}>About you</h1>
+                <p className={styles.lead}>These details help tailor health guidance.</p>
+              </div>
               <TextField
                 label="Date of birth"
                 type="date"
@@ -241,9 +246,11 @@ export default function Onboarding() {
           )}
 
           {stepKey === 'health' && (
-            <section className={styles.form}>
-              <h1 ref={headingRef} tabIndex={-1} className={styles.title}>Health background</h1>
-              <p className={styles.lead}>Type an item and press Enter or Add. Nothing to add? Just continue.</p>
+            <section className={styles.stack}>
+              <div>
+                <h1 ref={headingRef} tabIndex={-1} className={styles.title}>Health background</h1>
+                <p className={styles.lead}>Type an item and press Enter or Add. Nothing to add? Just continue.</p>
+              </div>
               <TagInput label="Allergies" items={draft.allergies} onChange={(v) => set({ allergies: v })} placeholder="e.g. Penicillin" />
               <TagInput label="Existing conditions" items={draft.preExistingConditions} onChange={(v) => set({ preExistingConditions: v })} placeholder="e.g. Asthma" />
               <MedicationsEditor rows={draft.currentMedications} onChange={(v) => set({ currentMedications: v })} error={err('currentMedications')} />
@@ -251,9 +258,11 @@ export default function Onboarding() {
           )}
 
           {stepKey === 'contact' && (
-            <section className={styles.form}>
-              <h1 ref={headingRef} tabIndex={-1} className={styles.title}>Contact details</h1>
-              <p className={styles.lead}>Someone we can show first in an emergency, and how to reach you.</p>
+            <section className={styles.stack}>
+              <div>
+                <h1 ref={headingRef} tabIndex={-1} className={styles.title}>Contact details</h1>
+                <p className={styles.lead}>How to reach you, and someone we can show first in an emergency.</p>
+              </div>
               <TextField label="Your phone" type="tel" inputMode="tel" autoComplete="tel" value={draft.phone} onChange={(v) => set({ phone: v })} placeholder="+1 555 123 4567" error={err('phone')} />
               <TextField label="Address" autoComplete="street-address" value={draft.address} onChange={(v) => set({ address: v })} maxLength={LIMITS.address} placeholder="Street, city" error={err('address')} />
               <fieldset className={styles.fieldset}>
@@ -268,37 +277,39 @@ export default function Onboarding() {
           )}
 
           {stepKey === 'permissions' && (
-            <section>
-              <h1 ref={headingRef} tabIndex={-1} className={styles.title}>Permissions</h1>
-              <p className={styles.lead}>Both are optional. We only ask when needed, and never record anything now.</p>
+            <section className={styles.stack}>
+              <div>
+                <h1 ref={headingRef} tabIndex={-1} className={styles.title}>Permissions</h1>
+                <p className={styles.lead}>Both are optional. We only use them when you ask, and nothing is recorded now.</p>
+              </div>
               <div className={styles.permList}>
                 <PermissionRow
                   title="Location"
                   description="Find hospitals and clinics near you."
                   status={perms.location}
                   onRequest={() => ask('location', requestLocation)}
-                  icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></svg>}
+                  icon={MapPin}
                 />
                 <PermissionRow
                   title="Microphone"
-                  description="Describe your symptoms by voice."
+                  description="Describe your symptoms to Nura by voice."
                   status={perms.mic}
                   onRequest={() => ask('mic', requestMicrophone)}
-                  icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="3" width="6" height="12" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></svg>}
+                  icon={Mic}
                 />
               </div>
             </section>
           )}
 
           {isLast && (
-            <section>
-              <div className={styles.heroIcon} aria-hidden="true">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7" /></svg>
+            <section className={styles.stack}>
+              <div className={styles.nuraHero}><Nura size={96} mood="happy" /></div>
+              <div>
+                <h1 ref={headingRef} tabIndex={-1} className={styles.title}>You&apos;re all set</h1>
+                <p className={styles.lead}>
+                  {summary.length ? 'Here is what we will save to your profile.' : 'You skipped the details. You can add them any time from your profile.'}
+                </p>
               </div>
-              <h1 ref={headingRef} tabIndex={-1} className={styles.title}>You are all set</h1>
-              <p className={styles.lead}>
-                {summary.length ? 'Here is what we will save to your profile.' : 'You skipped the details. You can add them any time from your profile.'}
-              </p>
               {summary.length > 0 && (
                 <dl className={styles.summary}>
                   {summary.map(([k, v]) => (
@@ -313,33 +324,33 @@ export default function Onboarding() {
           )}
 
           <div aria-live="assertive" className={styles.liveRegion}>
-            {saveError && <p className={styles.saveError} role="alert">{saveError}</p>}
+            {saveError && <Alert tone="danger" icon={AlertCircle}>{saveError}</Alert>}
           </div>
         </main>
 
         <footer className={styles.footer}>
           <div className={styles.actions}>
             {!isFirst && (
-              <button type="button" className={styles.secondaryBtn} onClick={back} disabled={saving}>Back</button>
+              <Button variant="secondary" size="lg" icon={ArrowLeft} onClick={back} disabled={saving} className={styles.backBtn}>Back</Button>
             )}
             {isLast ? (
-              <button type="button" className={styles.primaryBtn} onClick={done} disabled={saving}>
-                {saving ? <><Spinner size="sm" /> Saving…</> : 'Go to my dashboard'}
-              </button>
+              <Button size="lg" onClick={done} loading={saving} className={styles.primaryBtn}>
+                {saving ? 'Saving' : 'Go to my home'}
+              </Button>
             ) : (
-              <button type="button" className={styles.primaryBtn} onClick={next} disabled={saving}>
-                {isFirst ? 'Get started' : 'Next'}
-              </button>
+              <Button size="lg" iconRight={ArrowRight} onClick={next} disabled={saving} className={styles.primaryBtn}>
+                {isFirst ? 'Get started' : 'Continue'}
+              </Button>
             )}
           </div>
           <div className={styles.links}>
             {optionalStep && (
-              <button type="button" className={styles.linkBtn} onClick={skipStep} disabled={saving}>Skip for now</button>
+              <Button variant="ghost" size="sm" onClick={skipStep} disabled={saving}>Skip this step</Button>
             )}
             {!isLast && (
-              <button type="button" className={styles.linkBtn} onClick={skipSetup} disabled={saving}>
-                {saving ? 'Saving…' : 'Skip setup'}
-              </button>
+              <Button variant="ghost" size="sm" onClick={skipSetup} disabled={saving} className={styles.mutedLink}>
+                {saving ? 'Saving' : 'Skip setup'}
+              </Button>
             )}
           </div>
         </footer>

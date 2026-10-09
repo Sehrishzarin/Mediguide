@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
+import { Clock, CheckCircle2, XCircle, MapPin, Stethoscope, FileText, Upload, Eye, Trash2, Plus, AlertCircle, Users } from 'lucide-react';
 import { addStaffMember, removeStaffMember, uploadFile, deleteFile, openFile } from '../../services/api';
-import Spinner from '../../components/Spinner';
+import { Alert, Avatar, Badge, Button, Card, EmptyState, Field, Input, List } from '../../components/ui';
+import friendlyError from '../../utils/friendlyError';
 import styles from './OrgDashboard.module.css';
 
 const SPECIALTIES = ['Cardiologist', 'General Physician', 'Pediatrician', 'Dermatologist', 'Gastroenterologist', 'Orthopedist'];
@@ -10,22 +12,28 @@ const MAX_BYTES = 2 * 1024 * 1024;
 const STATUS = {
   pending: {
     label: 'Pending review',
-    cls: 'statusPending',
+    tone: 'warning',
+    alert: 'warning',
+    icon: Clock,
     text: 'Our team is verifying your facility. You can add staff and upload verification documents now. Patients can book your doctors once you are approved.'
   },
   approved: {
     label: 'Approved',
-    cls: 'statusApproved',
+    tone: 'success',
+    alert: 'success',
+    icon: CheckCircle2,
     text: 'Your facility is live. Every staff member you add becomes a bookable doctor session for patients straight away.'
   },
   rejected: {
     label: 'Not approved',
-    cls: 'statusRejected',
+    tone: 'danger',
+    alert: 'danger',
+    icon: XCircle,
     text: 'This listing was not approved. Please check your details and documents, then register the facility again with corrected information.'
   }
 };
 
-const formatSize = (b) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+const formatSize = (b) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round((b || 0) / 1024))} KB`);
 const formatDate = (iso) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
@@ -36,22 +44,24 @@ function StaffSection({ org, onChange }) {
   const [specialty, setSpecialty] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [nameError, setNameError] = useState('');
   const [confirmId, setConfirmId] = useState(null);
   const [removingId, setRemovingId] = useState(null);
 
   const add = async (e) => {
     e.preventDefault();
     const n = name.trim();
-    if (!n) { setError('Enter the staff member\'s name.'); return; }
+    if (!n) { setNameError('Enter the doctor\'s name.'); return; }
     setBusy(true);
     setError('');
+    setNameError('');
     try {
       const res = await addStaffMember(org.id, { name: n, specialty: specialty.trim() || 'General Physician' });
       onChange({ ...org, staff: res.data });
       setName('');
       setSpecialty('');
     } catch (err) {
-      setError(err.message);
+      setError(friendlyError(err, 'We could not add this staff member. Please try again.'));
     } finally {
       setBusy(false);
     }
@@ -65,71 +75,71 @@ function StaffSection({ org, onChange }) {
       onChange({ ...org, staff: res.data });
       setConfirmId(null);
     } catch (err) {
-      setError(err.message);
+      setError(friendlyError(err, 'We could not remove this staff member. Please try again.'));
     } finally {
       setRemovingId(null);
     }
   };
 
   const listId = `specialties-${org.id}`;
+  const nameId = `staff-name-${org.id}`;
+  const specId = `staff-spec-${org.id}`;
 
   return (
     <section className={styles.section} aria-labelledby={`staff-${org.id}`}>
-      <h3 id={`staff-${org.id}`} className={styles.sectionTitle}>Doctors and staff <span className={styles.count}>{org.staff.length}</span></h3>
-      {org.status === 'approved'
-        ? <p className={styles.muted}>New doctors appear in patients&apos; booking list immediately.</p>
-        : <p className={styles.muted}>Doctors become bookable by patients once your facility is approved.</p>}
+      <div className={styles.sectionHead}>
+        <h3 id={`staff-${org.id}`} className={styles.sectionTitle}>
+          Doctors and staff <Badge>{org.staff.length}</Badge>
+        </h3>
+        <p className={styles.muted}>
+          {org.status === 'approved'
+            ? 'New doctors appear in patients’ booking list immediately.'
+            : 'Doctors become bookable by patients once your facility is approved.'}
+        </p>
+      </div>
 
       {org.staff.length === 0 ? (
-        <p className={styles.empty}>No staff added yet.</p>
+        <div className={styles.emptyBox}>
+          <EmptyState compact icon={Users} title="No staff added yet" text="Add your first doctor below." />
+        </div>
       ) : (
-        <ul className={styles.list}>
+        <List>
           {org.staff.map((s) => (
-            <li key={s._id} className={styles.listItem}>
-              <div className={styles.itemMain}>
-                <span className={styles.itemTitle}>{s.name}</span>
-                <span className={styles.itemSub}>{s.specialty}</span>
+            <div key={s._id} className={styles.row}>
+              <Avatar name={s.name} size={40} />
+              <div className={styles.rowMain}>
+                <span className={styles.rowTitle}>{s.name}</span>
+                <span className={styles.rowSub}>{s.specialty}</span>
               </div>
               {confirmId === s._id ? (
                 <div className={styles.confirm}>
-                  <span>Remove? Unbooked sessions will be deleted.</span>
-                  <button type="button" className={styles.btnDanger} disabled={removingId === s._id} onClick={() => remove(s._id)}>
-                    {removingId === s._id ? <Spinner size="sm" /> : 'Remove'}
-                  </button>
-                  <button type="button" className={styles.btnGhost} onClick={() => setConfirmId(null)}>Keep</button>
+                  <span className={styles.confirmText}>Remove? Unbooked sessions will be deleted.</span>
+                  <div className={styles.confirmBtns}>
+                    <Button variant="ghost" size="sm" onClick={() => setConfirmId(null)} disabled={removingId === s._id}>Keep</Button>
+                    <Button variant="danger" size="sm" loading={removingId === s._id} onClick={() => remove(s._id)}>Remove</Button>
+                  </div>
                 </div>
               ) : (
-                <button type="button" className={styles.btnLink} onClick={() => setConfirmId(s._id)} aria-label={`Remove ${s.name}`}>Remove</button>
+                <Button variant="ghost" size="sm" icon={Trash2} className={styles.removeBtn} onClick={() => setConfirmId(s._id)} aria-label={`Remove ${s.name}`}>
+                  <span className={styles.hideXs}>Remove</span>
+                </Button>
               )}
-            </li>
+            </div>
           ))}
-        </ul>
+        </List>
       )}
 
       <form className={styles.addRow} onSubmit={add} noValidate>
-        <input
-          className={styles.input}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Doctor name"
-          aria-label="Doctor name"
-          maxLength={80}
-        />
-        <input
-          className={styles.input}
-          value={specialty}
-          onChange={(e) => setSpecialty(e.target.value)}
-          list={listId}
-          placeholder="Specialty"
-          aria-label="Specialty"
-          maxLength={60}
-        />
+        <Field label="Doctor name" htmlFor={nameId} error={nameError} className={styles.addField}>
+          <Input id={nameId} value={name} onChange={(e) => { setName(e.target.value); setNameError(''); }} placeholder="Dr. Sara Khan" maxLength={80} invalid={Boolean(nameError)} autoComplete="off" />
+        </Field>
+        <Field label="Specialty" htmlFor={specId} className={styles.addField}>
+          <Input id={specId} value={specialty} onChange={(e) => setSpecialty(e.target.value)} list={listId} placeholder="General Physician" maxLength={60} autoComplete="off" />
+        </Field>
         <datalist id={listId}>{SPECIALTIES.map((s) => <option key={s} value={s} />)}</datalist>
-        <button type="submit" className={styles.btnPrimary} disabled={busy}>
-          {busy ? <Spinner size="sm" /> : 'Add'}
-        </button>
+        <Button type="submit" icon={Plus} loading={busy} className={styles.addBtn}>Add doctor</Button>
       </form>
-      {error && <p className={styles.formError} role="alert">{error}</p>}
+      {error && <Alert tone="danger" icon={AlertCircle}>{error}</Alert>}
     </section>
   );
 }
@@ -142,6 +152,7 @@ function DocumentsSection({ org, onChange }) {
   const [busyId, setBusyId] = useState(null);
 
   const docId = (d) => d.id || d._id;
+  const pick = () => inputRef.current?.click();
 
   const upload = async (e) => {
     const file = e.target.files?.[0];
@@ -155,7 +166,7 @@ function DocumentsSection({ org, onChange }) {
       const res = await uploadFile(file, { kind: 'org-document', organizationId: org.id });
       onChange({ ...org, documents: [res.data, ...org.documents] });
     } catch (err) {
-      setError(err.message);
+      setError(friendlyError(err, 'The upload did not go through. Please try again.'));
     } finally {
       setUploading(false);
     }
@@ -164,7 +175,7 @@ function DocumentsSection({ org, onChange }) {
   const view = async (id, filename) => {
     setBusyId(id);
     setError('');
-    try { await openFile(id, filename); } catch (err) { setError(err.message); } finally { setBusyId(null); }
+    try { await openFile(id, filename); } catch (err) { setError(friendlyError(err, 'We could not open this document.')); } finally { setBusyId(null); }
   };
 
   const remove = async (id) => {
@@ -175,7 +186,7 @@ function DocumentsSection({ org, onChange }) {
       onChange({ ...org, documents: org.documents.filter((d) => docId(d) !== id) });
       setConfirmId(null);
     } catch (err) {
-      setError(err.message);
+      setError(friendlyError(err, 'We could not delete this document.'));
     } finally {
       setBusyId(null);
     }
@@ -183,46 +194,68 @@ function DocumentsSection({ org, onChange }) {
 
   return (
     <section className={styles.section} aria-labelledby={`docs-${org.id}`}>
-      <h3 id={`docs-${org.id}`} className={styles.sectionTitle}>Verification documents <span className={styles.count}>{org.documents.length}</span></h3>
-      <p className={styles.muted}>Upload your licence or registration certificate so we can verify you. PDF, PNG, JPG or WEBP, up to 2 MB each.</p>
+      <div className={styles.sectionHeadRow}>
+        <div className={styles.sectionHead}>
+          <h3 id={`docs-${org.id}`} className={styles.sectionTitle}>
+            Verification documents <Badge>{org.documents.length}</Badge>
+          </h3>
+          <p className={styles.muted}>Your licence or registration certificate. PDF, PNG, JPG or WEBP, up to 2 MB each.</p>
+        </div>
+        {org.documents.length > 0 && (
+          <Button variant="secondary" size="sm" icon={Upload} loading={uploading} onClick={pick} className={styles.headBtn}>
+            {uploading ? 'Uploading' : 'Upload'}
+          </Button>
+        )}
+      </div>
+
+      <input ref={inputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp" hidden onChange={upload} />
 
       {org.documents.length === 0 ? (
-        <p className={styles.empty}>No documents uploaded yet.</p>
+        <div className={styles.emptyBox}>
+          <EmptyState
+            compact
+            icon={FileText}
+            title="No documents uploaded yet"
+            text="Upload a document so our team can verify your facility."
+            action={<Button size="sm" icon={Upload} loading={uploading} onClick={pick}>{uploading ? 'Uploading' : 'Upload a document'}</Button>}
+          />
+        </div>
       ) : (
-        <ul className={styles.list}>
+        <List>
           {org.documents.map((d) => {
             const id = docId(d);
             return (
-              <li key={id} className={styles.listItem}>
-                <div className={styles.itemMain}>
-                  <span className={styles.itemTitle}>{d.filename}</span>
-                  <span className={styles.itemSub}>{formatSize(d.size)} &middot; {formatDate(d.uploadedAt)}</span>
+              <div key={id} className={styles.row}>
+                <span className={styles.docIcon} aria-hidden="true"><FileText size={20} /></span>
+                <div className={styles.rowMain}>
+                  <span className={`${styles.rowTitle} ${styles.ellipsis}`}>{d.filename}</span>
+                  <span className={styles.rowSub}>{formatSize(d.size)} · {formatDate(d.uploadedAt)}</span>
                 </div>
                 {confirmId === id ? (
                   <div className={styles.confirm}>
-                    <span>Delete this file?</span>
-                    <button type="button" className={styles.btnDanger} disabled={busyId === id} onClick={() => remove(id)}>
-                      {busyId === id ? <Spinner size="sm" /> : 'Delete'}
-                    </button>
-                    <button type="button" className={styles.btnGhost} onClick={() => setConfirmId(null)}>Keep</button>
+                    <span className={styles.confirmText}>Delete this file?</span>
+                    <div className={styles.confirmBtns}>
+                      <Button variant="ghost" size="sm" onClick={() => setConfirmId(null)} disabled={busyId === id}>Keep</Button>
+                      <Button variant="danger" size="sm" loading={busyId === id} onClick={() => remove(id)}>Delete</Button>
+                    </div>
                   </div>
                 ) : (
-                  <div className={styles.itemActions}>
-                    <button type="button" className={styles.btnLink} disabled={busyId === id} onClick={() => view(id, d.filename)}>View</button>
-                    <button type="button" className={styles.btnLink} onClick={() => setConfirmId(id)} aria-label={`Delete ${d.filename}`}>Delete</button>
+                  <div className={styles.rowActions}>
+                    <Button variant="ghost" size="sm" icon={Eye} loading={busyId === id} onClick={() => view(id, d.filename)} aria-label={`View ${d.filename}`}>
+                      <span className={styles.hideXs}>View</span>
+                    </Button>
+                    <Button variant="ghost" size="sm" icon={Trash2} className={styles.removeBtn} onClick={() => setConfirmId(id)} aria-label={`Delete ${d.filename}`}>
+                      <span className={styles.hideXs}>Delete</span>
+                    </Button>
                   </div>
                 )}
-              </li>
+              </div>
             );
           })}
-        </ul>
+        </List>
       )}
 
-      <input ref={inputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp" hidden onChange={upload} />
-      <button type="button" className={styles.btnOutline} disabled={uploading} onClick={() => inputRef.current?.click()}>
-        {uploading ? <><Spinner size="sm" /> Uploading...</> : 'Upload a document'}
-      </button>
-      {error && <p className={styles.formError} role="alert">{error}</p>}
+      {error && <Alert tone="danger" icon={AlertCircle}>{error}</Alert>}
     </section>
   );
 }
@@ -230,31 +263,34 @@ function DocumentsSection({ org, onChange }) {
 export default function OrgCard({ org, onChange }) {
   const status = STATUS[org.status] || STATUS.pending;
   return (
-    <article className={styles.card}>
+    <Card as="article" padding="none" className={styles.orgCard}>
       <header className={styles.orgHead}>
         <div className={styles.orgHeadText}>
-          <h2 className={styles.cardTitle}>{org.name}</h2>
-          <p className={styles.muted}>{org.type} &middot; {org.address}</p>
+          <h2 className={styles.orgTitle}>{org.name}</h2>
+          <p className={styles.orgMeta}>
+            <span className={styles.metaItem}><Stethoscope size={14} aria-hidden="true" />{org.type}</span>
+            <span className={styles.metaItem}><MapPin size={14} aria-hidden="true" />{org.address}</span>
+          </p>
         </div>
-        <span className={`${styles.statusBadge} ${styles[status.cls]}`}>{status.label}</span>
+        <Badge tone={status.tone} icon={status.icon}>{status.label}</Badge>
       </header>
 
-      <div className={`${styles.banner} ${styles[`${status.cls}Banner`]}`} role="status">
-        <strong>{status.label}.</strong> {status.text}
+      <div className={styles.orgBody}>
+        <Alert tone={status.alert} icon={status.icon}>{status.text}</Alert>
+
+        {org.services?.length > 0 && (
+          <div className={styles.services} aria-label="Services">
+            {org.services.map((s) => <Badge key={s} tone="brand">{s}</Badge>)}
+          </div>
+        )}
+
+        {org.status !== 'rejected' && (
+          <>
+            <StaffSection org={org} onChange={onChange} />
+            <DocumentsSection org={org} onChange={onChange} />
+          </>
+        )}
       </div>
-
-      {org.services?.length > 0 && (
-        <div className={styles.chips}>
-          {org.services.map((s) => <span key={s} className={styles.chipStatic}>{s}</span>)}
-        </div>
-      )}
-
-      {org.status !== 'rejected' && (
-        <>
-          <StaffSection org={org} onChange={onChange} />
-          <DocumentsSection org={org} onChange={onChange} />
-        </>
-      )}
-    </article>
+    </Card>
   );
 }

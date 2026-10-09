@@ -1,236 +1,96 @@
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.label {
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
-}
-
-.controlWrap {
-  position: relative;
-}
-
-.control {
-  width: 100%;
-  min-height: 48px;
-  padding: 0.625rem 0.875rem;
-  font-size: 16px; /* prevents iOS zoom on focus */
-  color: var(--color-text-primary);
-  background: #fff;
-  border: 1.5px solid var(--color-border);
-  border-radius: var(--radius-action);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  appearance: none;
-  -webkit-appearance: none;
-}
-
-textarea.control {
-  min-height: 96px;
-  resize: vertical;
-  line-height: 1.5;
-}
-
-.control::placeholder {
-  color: #9AA8A5;
-}
-
-.control:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(15, 156, 142, 0.18);
-}
-
-.control:disabled {
-  background: #F1F5F4;
-  color: var(--color-text-muted);
-}
-
-.controlError {
-  border-color: var(--color-danger);
-}
-
-.controlError:focus {
-  box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.18);
-}
-
-.hasSuffix {
-  padding-right: 3rem;
-}
-
+/* Extras on top of the UI kit fields: unit suffix, tag chips, repeatable rows */
+.suffixWrap { position: relative; }
+.hasSuffix { padding-right: 44px; }
 .suffix {
   position: absolute;
-  right: 0.875rem;
+  right: var(--sp-3);
   top: 50%;
   transform: translateY(-50%);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+  color: var(--text-3);
   pointer-events: none;
 }
 
-.select {
-  padding-right: 2.25rem;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B7876' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.75rem center;
-}
-
-.hint {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-  line-height: 1.4;
-}
-
-.error {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-danger);
-  line-height: 1.4;
-}
-
-/* Tag input */
 .tagRow {
   display: flex;
-  gap: 8px;
+  gap: var(--sp-2);
 }
-
-.tagRow .control {
-  flex: 1;
-  min-width: 0;
-}
-
-.addBtn {
-  min-height: 48px;
-  min-width: 64px;
-  padding: 0 1rem;
-  border-radius: var(--radius-action);
-  background: #E6F6F4;
-  color: #0B7A6F;
-  font-weight: 700;
-  font-size: 0.875rem;
-  border: 1.5px solid #BDE8E2;
-}
-
-.addBtn:hover {
-  background: #D3F0EC;
-}
+.tagRow > :first-child { flex: 1; min-width: 0; }
+.tagRow > button { flex-shrink: 0; }
 
 .chips {
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 2px;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
 }
-
 .chip {
   display: inline-flex;
   align-items: center;
+  gap: 2px;
   max-width: 100%;
   min-height: 36px;
-  padding: 0 4px 0 12px;
-  background: #F0FDFA;
-  border: 1px solid #BDE8E2;
-  border-radius: var(--radius-pill);
-  color: #0B7A6F;
-  font-size: 0.8125rem;
-  font-weight: 600;
+  padding-left: var(--sp-3);
+  border-radius: var(--r-full);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
 }
-
-.chipText {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
+.chipText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chipRemove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  margin-left: 2px;
-  border-radius: 50%;
-  color: #0B7A6F;
   flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: inherit;
 }
+.chipRemove:hover { background: color-mix(in srgb, var(--brand) 12%, transparent); }
 
-.chipRemove:hover {
-  background: rgba(229, 62, 62, 0.12);
-  color: var(--color-danger);
-}
+.group { display: flex; flex-direction: column; gap: var(--sp-2); }
+.groupLabel { font-size: var(--fs-sm); font-weight: var(--fw-medium); color: var(--text); }
+.hint { font-size: var(--fs-xs); color: var(--text-3); }
+.error { font-size: var(--fs-xs); color: var(--danger); font-weight: var(--fw-medium); }
 
-/* Repeating rows */
-.rows {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
+.rows { display: flex; flex-direction: column; gap: var(--sp-3); }
 .rowCard {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
 }
+.rowFoot { display: flex; justify-content: flex-end; margin-top: calc(-1 * var(--sp-1)); }
+.rowRemove { color: var(--danger); min-height: var(--tap); }
+.rowRemove:hover:not(:disabled) { background: var(--danger-soft); }
 
 .twoCol {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: var(--sp-3);
 }
-
-.rowRemove {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  padding: 0 12px;
-  border-radius: var(--radius-action);
-  color: var(--color-danger);
-  font-size: 0.8125rem;
-  font-weight: 700;
-}
-
-.rowRemove:hover {
-  background: #FEF2F2;
-}
-
-.addRowBtn {
-  align-self: flex-start;
-  min-height: 44px;
-  padding: 0 1rem;
-  border-radius: var(--radius-action);
-  border: 1.5px dashed #86D5CB;
-  color: #0B7A6F;
-  font-weight: 700;
-  font-size: 0.875rem;
-}
-
-.addRowBtn:hover {
-  background: #F0FDFA;
+@media (max-width: 359px) {
+  .twoCol { grid-template-columns: 1fr; }
 }
 
 .check {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  font-size: 0.875rem;
-  font-weight: 600;
+  gap: var(--sp-2);
+  min-height: var(--tap);
+  font-size: var(--fs-sm);
+  color: var(--text);
+  cursor: pointer;
+  align-self: flex-start;
 }
-
 .check input {
-  width: 22px;
-  height: 22px;
-  accent-color: var(--color-primary);
+  width: 20px;
+  height: 20px;
+  accent-color: var(--brand);
 }

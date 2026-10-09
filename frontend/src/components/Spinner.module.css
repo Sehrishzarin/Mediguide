@@ -1,8 +1,16 @@
-/* ── Spinner ───────────────────────────────────────────────── */
-.spinner { animation: spin 1s linear infinite; }
+/* ── Spinner ── */
+.spinner { display: inline-flex; flex-shrink: 0; vertical-align: middle; }
+.ring {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  opacity: 0.9;
+  animation: spin 0.75s linear infinite;
+}
 @keyframes spin { to { transform: rotate(360deg); } }
-.sm { width: 1rem; height: 1rem; }
-.md { width: 1.5rem; height: 1.5rem; }
-.lg { width: 2rem; height: 2rem; }
-.circle { opacity: 0.25; }
-.path { opacity: 0.75; }
+.sm { width: 16px; height: 16px; }
+.md { width: 24px; height: 24px; }
+.lg { width: 32px; height: 32px; color: var(--brand); }
+.lg .ring { border-width: 3px; }

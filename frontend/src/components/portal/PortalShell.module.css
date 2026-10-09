@@ -1,0 +1,73 @@
+.page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  max-width: var(--content-max);
+  min-height: 60px;
+  margin: 0 auto;
+  padding: var(--sp-2) var(--sp-4);
+}
+
+@media (min-width: 768px) {
+  .inner { padding: var(--sp-2) var(--sp-8); }
+}
+
+.user {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.userInfo {
+  display: none;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .userInfo { display: inline-flex; }
+}
+
+.userName {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logout { min-height: var(--tap); }
+
+.main {
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--sp-6) var(--sp-4) calc(var(--sp-10) + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .main { padding: var(--sp-8) var(--sp-8) var(--sp-12); }
+}

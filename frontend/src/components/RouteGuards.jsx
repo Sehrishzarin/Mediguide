@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import { useAuth, homeForRole } from '../context/AuthContext';
 import Spinner from './Spinner';
 
@@ -37,4 +38,14 @@ export function GuestOnlyGuard() {
   if (loading) return <FullScreenLoader />;
   if (user) return <Navigate to={homeForRole(user.role)} replace />;
   return <Outlet />;
+}
+
+// "/" — signed-in users go straight to their dashboard; the native app skips the
+// marketing landing page and opens on sign-in.
+export function RootRoute({ landing }) {
+  const { user, loading } = useAuth();
+  if (loading) return <FullScreenLoader />;
+  if (user) return <Navigate to={homeForRole(user.role)} replace />;
+  if (Capacitor.isNativePlatform()) return <Navigate to="/login" replace />;
+  return landing;
 }

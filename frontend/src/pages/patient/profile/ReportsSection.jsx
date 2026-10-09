@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { Upload, FileText, Image as ImageIcon, Eye, Trash2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import * as api from '../../../services/api';
-import Spinner from '../../../components/Spinner';
+import { Alert, Button, EmptyState, ErrorState, List, Skeleton } from '../../../components/ui';
+import friendlyError from '../../../utils/friendlyError';
 import { REPORT_MAX_BYTES, REPORT_TYPES, formatBytes } from './profileModel';
 import styles from '../PatientProfile.module.css';
 
@@ -26,12 +28,13 @@ export default function ReportsSection() {
     let cancelled = false;
     api.listFiles('report')
       .then((res) => { if (!cancelled) { setFiles(res.data || []); setLoadError(''); } })
-      .catch((e) => { if (!cancelled) setLoadError(e.message || 'Could not load your reports.'); })
+      .catch((e) => { if (!cancelled) setLoadError(friendlyError(e, 'We could not load your reports.')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [reloadKey]);
 
   const retry = () => { setLoading(true); setLoadError(''); setReloadKey((k) => k + 1); };
+  const pick = () => inputRef.current?.click();
 
   const onPick = async (e) => {
     const file = e.target.files?.[0];
@@ -56,19 +59,19 @@ export default function ReportsSection() {
       setFiles((f) => [res.data, ...f]);
       setMessage({ type: 'ok', text: `${file.name} uploaded.` });
     } catch (err) {
-      setMessage({ type: 'error', text: err.message || 'Upload failed. Please try again.' });
+      setMessage({ type: 'error', text: friendlyError(err, 'The upload did not go through. Please try again.') });
     } finally {
       setUploading(false);
     }
   };
 
-  const view = async (id) => {
-    setBusyId(id);
+  const view = async (f) => {
+    setBusyId(f.id);
     setMessage({ type: '', text: '' });
     try {
-      await api.openFile(id);
+      await api.openFile(f.id, f.filename);
     } catch (err) {
-      setMessage({ type: 'error', text: err.message || 'Could not open this report.' });
+      setMessage({ type: 'error', text: friendlyError(err, 'We could not open this report.') });
     } finally {
       setBusyId(null);
     }
@@ -83,7 +86,7 @@ export default function ReportsSection() {
       setConfirmId(null);
       setMessage({ type: 'ok', text: 'Report deleted.' });
     } catch (err) {
-      setMessage({ type: 'error', text: err.message || 'Could not delete this report.' });
+      setMessage({ type: 'error', text: friendlyError(err, 'We could not delete this report.') });
     } finally {
       setBusyId(null);
     }
@@ -92,60 +95,80 @@ export default function ReportsSection() {
   return (
     <div className={styles.stack}>
       <div className={styles.reportsTop}>
-        <span className={styles.reportsCount}>{loading ? ' ' : `${files.length} of ${MAX_FILES} used`}</span>
-        <input ref={inputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp" className={styles.hiddenInput} onChange={onPick} tabIndex={-1} aria-hidden="true" />
-        <button type="button" className={styles.secondaryBtn} onClick={() => inputRef.current?.click()} disabled={uploading || loading}>
-          {uploading ? <><Spinner size="sm" /> Uploading…</> : 'Upload report'}
-        </button>
+        <span className={styles.reportsCount}>{loading || loadError ? '' : `${files.length} of ${MAX_FILES} used`}</span>
+        <input ref={inputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onPick} tabIndex={-1} aria-hidden="true" />
+        {!loadError && !(files.length === 0 && !loading) && (
+          <Button variant="secondary" icon={Upload} onClick={pick} loading={uploading} disabled={loading}>
+            {uploading ? 'Uploading' : 'Upload report'}
+          </Button>
+        )}
       </div>
 
       <div aria-live="polite">
-        {message.text && <p className={message.type === 'error' ? styles.inlineError : styles.inlineOk} role={message.type === 'error' ? 'alert' : 'status'}>{message.text}</p>}
+        {message.text && (
+          <Alert tone={message.type === 'error' ? 'danger' : 'success'} icon={message.type === 'error' ? AlertCircle : CheckCircle2}>
+            {message.text}
+          </Alert>
+        )}
       </div>
 
-      {loading && <div className={styles.centerState}><Spinner size="md" /><span>Loading reports…</span></div>}
-
-      {!loading && loadError && (
-        <div className={styles.inlineError} role="alert">
-          {loadError} <button type="button" className={styles.textBtn} onClick={retry}>Try again</button>
+      {loading && (
+        <div className={styles.skeletonList} aria-label="Loading reports" role="status">
+          {[0, 1].map((i) => (
+            <div key={i} className={styles.skeletonRow}>
+              <Skeleton width={40} height={40} radius={12} />
+              <div className={styles.skeletonText}>
+                <Skeleton width="60%" height={14} />
+                <Skeleton width="35%" height={12} />
+              </div>
+            </div>
+          ))}
         </div>
       )}
+
+      {!loading && loadError && <ErrorState compact message={loadError} onRetry={retry} />}
 
       {!loading && !loadError && files.length === 0 && (
-        <div className={styles.emptyState}>
-          <p className={styles.emptyTitle}>No reports yet</p>
-          <p className={styles.emptyText}>Upload lab results or prescriptions so you can find them quickly.</p>
-        </div>
+        <EmptyState
+          compact
+          icon={FileText}
+          title="No reports yet"
+          text="Upload lab results or prescriptions so you can find them quickly."
+          action={<Button size="sm" icon={Upload} onClick={pick} loading={uploading}>Upload your first report</Button>}
+        />
       )}
 
-      {!loading && files.length > 0 && (
-        <ul className={styles.fileList}>
-          {files.map((f) => (
-            <li key={f.id} className={styles.fileItem}>
-              <div className={styles.fileIcon} aria-hidden="true">{f.mimeType === 'application/pdf' ? 'PDF' : 'IMG'}</div>
-              <div className={styles.fileInfo}>
-                <p className={styles.fileName}>{f.filename}</p>
-                <p className={styles.fileMeta}>{formatBytes(f.size)} · {fmtDate(f.uploadedAt)}</p>
+      {!loading && !loadError && files.length > 0 && (
+        <List>
+          {files.map((f) => {
+            const isPdf = f.mimeType === 'application/pdf';
+            const Icon = isPdf ? FileText : ImageIcon;
+            const busy = busyId === f.id;
+            return (
+              <div key={f.id} className={styles.fileRow}>
+                <span className={styles.fileIcon} aria-hidden="true"><Icon size={20} /></span>
+                <div className={styles.fileInfo}>
+                  <p className={styles.fileName}>{f.filename}</p>
+                  <p className={styles.fileMeta}>{isPdf ? 'PDF' : 'Image'} · {formatBytes(f.size)} · {fmtDate(f.uploadedAt)}</p>
+                </div>
+                {confirmId === f.id ? (
+                  <div className={styles.fileActions}>
+                    <span className={styles.confirmText}>Delete?</span>
+                    <Button variant="danger" size="sm" onClick={() => remove(f.id)} loading={busy}>Delete</Button>
+                    <Button variant="ghost" size="sm" onClick={() => setConfirmId(null)} disabled={busy}>Keep</Button>
+                  </div>
+                ) : (
+                  <div className={styles.fileActions}>
+                    <Button variant="ghost" size="sm" icon={Eye} onClick={() => view(f)} loading={busy} aria-label={`View ${f.filename}`}><span className={styles.hideXs}>View</span></Button>
+                    <Button variant="ghost" size="sm" icon={Trash2} className={styles.deleteBtn} onClick={() => setConfirmId(f.id)} aria-label={`Delete ${f.filename}`}>
+                      <span className={styles.hideXs}>Delete</span>
+                    </Button>
+                  </div>
+                )}
               </div>
-              {confirmId === f.id ? (
-                <div className={styles.fileActions}>
-                  <span className={styles.confirmText}>Delete?</span>
-                  <button type="button" className={styles.dangerSmall} onClick={() => remove(f.id)} disabled={busyId === f.id}>
-                    {busyId === f.id ? <Spinner size="sm" /> : 'Delete'}
-                  </button>
-                  <button type="button" className={styles.ghostSmall} onClick={() => setConfirmId(null)} disabled={busyId === f.id}>Cancel</button>
-                </div>
-              ) : (
-                <div className={styles.fileActions}>
-                  <button type="button" className={styles.ghostSmall} onClick={() => view(f.id)} disabled={busyId === f.id}>
-                    {busyId === f.id ? <Spinner size="sm" /> : 'View'}
-                  </button>
-                  <button type="button" className={styles.ghostSmallDanger} onClick={() => setConfirmId(f.id)} aria-label={`Delete ${f.filename}`}>Delete</button>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+            );
+          })}
+        </List>
       )}
     </div>
   );

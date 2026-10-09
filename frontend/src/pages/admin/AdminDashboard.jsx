@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { Clock, MapPin, Stethoscope, FileText, Eye, Check, X, RotateCw, CheckCircle2, AlertCircle, AlertTriangle, Inbox } from 'lucide-react';
 import { getPendingOrganizations, reviewOrganization, openFile } from '../../services/api';
-import Spinner from '../../components/Spinner';
+import { Alert, Badge, Button, Card, EmptyState, ErrorState, List, PageHeader, Skeleton } from '../../components/ui';
+import PortalShell from '../../components/portal/PortalShell';
+import friendlyError from '../../utils/friendlyError';
 import styles from './AdminDashboard.module.css';
 
 const formatDate = (iso) => {
@@ -19,74 +20,106 @@ function PendingCard({ org, onReview }) {
   const view = async (id, filename) => {
     setViewingId(id);
     setDocError('');
-    try { await openFile(id, filename); } catch (err) { setDocError(err.message); } finally { setViewingId(null); }
+    try { await openFile(id, filename); } catch (err) { setDocError(friendlyError(err, 'We could not open this document.')); } finally { setViewingId(null); }
   };
 
   const docs = org.documents || [];
   return (
-    <article className={styles.card}>
+    <Card as="article" padding="none" className={styles.card}>
       <header className={styles.cardHead}>
         <div className={styles.cardHeadText}>
           <h2 className={styles.cardTitle}>{org.name}</h2>
-          <p className={styles.sub}>{org.type} &middot; {org.address}</p>
+          <p className={styles.meta}>
+            <span className={styles.metaItem}><Stethoscope size={14} aria-hidden="true" />{org.type}</span>
+            <span className={styles.metaItem}><MapPin size={14} aria-hidden="true" />{org.address}</span>
+          </p>
         </div>
-        <span className={styles.badge}>Awaiting review</span>
+        <Badge tone="warning" icon={Clock}>Pending</Badge>
       </header>
 
-      <dl className={styles.facts}>
-        <div><dt>Owner</dt><dd>{org.owner?.name || 'Unknown'}{org.owner?.email && <span className={styles.subBlock}>{org.owner.email}</span>}</dd></div>
-        <div><dt>Contact</dt><dd>{org.phone || 'No phone'}{org.email && <span className={styles.subBlock}>{org.email}</span>}</dd></div>
-        <div><dt>Staff</dt><dd>{(org.staff || []).length} listed</dd></div>
-        <div><dt>Submitted</dt><dd>{formatDate(org.createdAt)}</dd></div>
-      </dl>
+      <div className={styles.cardBody}>
+        <dl className={styles.facts}>
+          <div>
+            <dt>Owner</dt>
+            <dd>{org.owner?.name || 'Unknown'}{org.owner?.email && <span className={styles.subBlock}>{org.owner.email}</span>}</dd>
+          </div>
+          <div>
+            <dt>Contact</dt>
+            <dd>{org.phone || 'No phone'}{org.email && <span className={styles.subBlock}>{org.email}</span>}</dd>
+          </div>
+          <div><dt>Staff</dt><dd>{(org.staff || []).length} listed</dd></div>
+          <div><dt>Submitted</dt><dd>{formatDate(org.createdAt) || 'Unknown'}</dd></div>
+        </dl>
 
-      {org.services?.length > 0 && (
-        <div className={styles.chips}>{org.services.map((s) => <span key={s} className={styles.chip}>{s}</span>)}</div>
-      )}
-
-      <div className={styles.docs}>
-        <h3 className={styles.docsTitle}>Verification documents ({docs.length})</h3>
-        {docs.length === 0 ? (
-          <p className={styles.warn}>No documents were uploaded. Consider rejecting or waiting.</p>
-        ) : (
-          <ul className={styles.docList}>
-            {docs.map((d) => {
-              const id = d.id || d._id;
-              return (
-                <li key={id} className={styles.docItem}>
-                  <span className={styles.docName}>{d.filename} <span className={styles.docMeta}>{formatSize(d.size)}</span></span>
-                  <button type="button" className={styles.btnLink} disabled={viewingId === id} onClick={() => view(id, d.filename)}>
-                    {viewingId === id ? <Spinner size="sm" /> : 'View'}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+        {org.services?.length > 0 && (
+          <div className={styles.services} aria-label="Services">
+            {org.services.map((s) => <Badge key={s} tone="brand">{s}</Badge>)}
+          </div>
         )}
-        {docError && <p className={styles.inlineError} role="alert">{docError}</p>}
+
+        <section className={styles.docs} aria-label="Verification documents">
+          <h3 className={styles.docsTitle}>Verification documents <Badge>{docs.length}</Badge></h3>
+          {docs.length === 0 ? (
+            <Alert tone="warning" icon={AlertTriangle}>No documents were uploaded. Consider waiting or rejecting.</Alert>
+          ) : (
+            <List>
+              {docs.map((d) => {
+                const id = d.id || d._id;
+                return (
+                  <div key={id} className={styles.docRow}>
+                    <span className={styles.docIcon} aria-hidden="true"><FileText size={18} /></span>
+                    <span className={styles.docText}>
+                      <span className={styles.docName}>{d.filename}</span>
+                      <span className={styles.docMeta}>{formatSize(d.size)}</span>
+                    </span>
+                    <Button variant="ghost" size="sm" icon={Eye} loading={viewingId === id} onClick={() => view(id, d.filename)} aria-label={`View ${d.filename}`} className={styles.viewBtn}>
+                      View
+                    </Button>
+                  </div>
+                );
+              })}
+            </List>
+          )}
+          {docError && <Alert tone="danger" icon={AlertCircle}>{docError}</Alert>}
+        </section>
       </div>
 
       <footer className={styles.actions}>
         {confirmReject ? (
           <>
             <span className={styles.confirmText}>Reject {org.name}?</span>
-            <button type="button" className={styles.btnDanger} onClick={() => onReview(org, 'rejected')}>Yes, reject</button>
-            <button type="button" className={styles.btnGhost} onClick={() => setConfirmReject(false)}>Cancel</button>
+            <div className={styles.actionBtns}>
+              <Button variant="secondary" onClick={() => setConfirmReject(false)}>Cancel</Button>
+              <Button variant="danger" icon={X} onClick={() => onReview(org, 'rejected')}>Yes, reject</Button>
+            </div>
           </>
         ) : (
-          <>
-            <button type="button" className={styles.btnApprove} onClick={() => onReview(org, 'approved')}>Approve</button>
-            <button type="button" className={styles.btnReject} onClick={() => setConfirmReject(true)}>Reject</button>
-          </>
+          <div className={styles.actionBtns}>
+            <Button variant="secondary" icon={X} onClick={() => setConfirmReject(true)}>Reject</Button>
+            <Button icon={Check} onClick={() => onReview(org, 'approved')}>Approve</Button>
+          </div>
         )}
       </footer>
-    </article>
+    </Card>
+  );
+}
+
+function LoadingCards() {
+  return (
+    <div className={styles.grid} role="status" aria-label="Loading organizations">
+      {[0, 1].map((i) => (
+        <Card key={i} padding="lg" className={styles.skeletonCard}>
+          <Skeleton width="55%" height={20} />
+          <Skeleton width="75%" height={14} />
+          <Skeleton height={72} radius={12} />
+          <Skeleton height={48} radius={12} />
+        </Card>
+      ))}
+    </div>
   );
 }
 
 export default function AdminDashboard() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
   const [orgs, setOrgs] = useState(null); // null while loading
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
@@ -97,7 +130,7 @@ export default function AdminDashboard() {
     let cancelled = false;
     getPendingOrganizations()
       .then((res) => { if (!cancelled) setOrgs(res.data); })
-      .catch((err) => { if (!cancelled) setLoadError(err.message); });
+      .catch((err) => { if (!cancelled) setLoadError(friendlyError(err, 'We could not load the review queue.')); });
     return () => { cancelled = true; };
   }, [reloadKey]);
 
@@ -126,74 +159,46 @@ export default function AdminDashboard() {
         next.splice(Math.min(index, next.length), 0, org);
         return next;
       });
-      setActionError(`Could not update ${org.name}: ${err.message}`);
+      setActionError(`We could not update ${org.name}. ${friendlyError(err, 'Please try again.')}`);
     }
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login', { replace: true });
   };
 
   const loading = orgs === null && !loadError;
 
   return (
-    <div className={styles.page}>
-      <header className={styles.topbar}>
-        <div className={styles.topbarInner}>
-          <div className={styles.brand}>
-            <img src="/logo.jpg" alt="" width="36" height="36" className={styles.logo} />
-            <div>
-              <span className={styles.brandName}>MediGuide</span>
-              <span className={styles.brandSub}>Admin console</span>
-            </div>
-          </div>
-          <div className={styles.userBox}>
-            <span className={styles.userName}>{user?.name}</span>
-            <button type="button" className={styles.btnLogout} onClick={handleLogout}>Log out</button>
-          </div>
+    <PortalShell portalName="Admin console">
+      <PageHeader
+        title="Facility review"
+        subtitle="Check each facility's documents, then approve or reject it."
+        actions={<Button variant="secondary" size="sm" icon={RotateCw} onClick={refresh} disabled={loading} className={styles.refresh}>Refresh</Button>}
+      />
+
+      <div className={styles.messages} aria-live="polite">
+        {notice && <Alert tone="success" icon={CheckCircle2}>{notice}</Alert>}
+        {actionError && <Alert tone="danger" icon={AlertCircle}>{actionError}</Alert>}
+      </div>
+
+      {orgs !== null && orgs.length > 0 && (
+        <p className={styles.count}>{orgs.length} {orgs.length === 1 ? 'facility' : 'facilities'} waiting for review</p>
+      )}
+
+      {loading && <LoadingCards />}
+
+      {loadError && (
+        <Card><ErrorState message={loadError} onRetry={refresh} /></Card>
+      )}
+
+      {orgs !== null && orgs.length === 0 && (
+        <Card>
+          <EmptyState icon={Inbox} title="All caught up" text="New facility registrations will appear here for review." />
+        </Card>
+      )}
+
+      {orgs !== null && orgs.length > 0 && (
+        <div className={styles.grid}>
+          {orgs.map((org) => <PendingCard key={org.id} org={org} onReview={review} />)}
         </div>
-      </header>
-
-      <main className={styles.main}>
-        <div className={styles.titleRow}>
-          <div>
-            <h1 className={styles.pageTitle}>Organizations awaiting approval</h1>
-            <p className={styles.sub}>Check the documents, then approve or reject each facility.</p>
-          </div>
-          <button type="button" className={styles.btnGhost} onClick={refresh} disabled={loading}>
-            {loading ? <Spinner size="sm" /> : 'Refresh'}
-          </button>
-        </div>
-
-        {notice && <p className={styles.notice} role="status">{notice}</p>}
-        {actionError && <p className={styles.inlineError} role="alert">{actionError}</p>}
-
-        {loading && (
-          <div className={styles.center} role="status" aria-label="Loading organizations"><Spinner size="lg" /></div>
-        )}
-
-        {loadError && (
-          <div className={styles.errorCard} role="alert">
-            <p>{loadError}</p>
-            <button type="button" className={styles.btnApprove} onClick={refresh}>Try again</button>
-          </div>
-        )}
-
-        {orgs !== null && orgs.length === 0 && (
-          <div className={styles.emptyCard}>
-            <div className={styles.emptyIcon} aria-hidden="true">&#10003;</div>
-            <h2>No organizations waiting</h2>
-            <p className={styles.sub}>New facility registrations will appear here for review.</p>
-          </div>
-        )}
-
-        {orgs !== null && (
-          <div className={styles.grid}>
-            {orgs.map((org) => <PendingCard key={org.id} org={org} onReview={review} />)}
-          </div>
-        )}
-      </main>
-    </div>
+      )}
+    </PortalShell>
   );
 }
