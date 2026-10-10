@@ -211,7 +211,7 @@
   max-width: 560px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   padding: var(--sp-1) var(--sp-2);
 }
 
@@ -235,13 +235,29 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
+  width: 52px;
+  max-width: 100%;
   height: 30px;
   border-radius: var(--r-full);
   transition: background-color 0.15s var(--ease);
 }
 .tabActive { color: var(--brand-ink); font-weight: var(--fw-semibold); }
 .tabActive .tabIcon { background: var(--brand-soft); }
-.tabLabel { line-height: 1.2; }
+.tabLabel { line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 359px) {
+  .tabInner { padding: var(--sp-1); }
+  .tabIcon { width: 44px; }
+}
+
+/* Printing (e.g. the doctor summary): only the page content */
+@media print {
+  .sidebar,
+  .topBarWrap,
+  .tabBar,
+  .desktopBanner { display: none !important; }
+  .layoutWrapper { display: block; background: var(--surface); min-height: 0; }
+  .main { margin-left: 0; }
+  .content { max-width: none; padding: 0; }
+}
 
 .layoutWrapper a:focus-visible { box-shadow: var(--ring); }

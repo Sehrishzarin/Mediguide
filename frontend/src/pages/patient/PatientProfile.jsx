@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { User, HeartPulse, Phone, FileText, ShieldCheck, ChevronLeft, LogOut, CheckCircle2, AlertCircle, BellRing } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { User, HeartPulse, Phone, FileText, ShieldCheck, ChevronLeft, LogOut, CheckCircle2, AlertCircle, BellRing, NotebookPen } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Avatar, Button, Card, List, ListItem, ProgressBar } from '../../components/ui';
 import friendlyError from '../../utils/friendlyError';
 import { TextField, SelectField, TagInput, MedicationsEditor, TreatmentsEditor } from './profile/FormKit';
 import ReportsSection from './profile/ReportsSection';
 import AccountSection from './profile/AccountSection';
+import JournalSettings from './journal/JournalSettings';
 import {
   BLOOD_GROUPS, GENDERS, PREGNANCY_OPTIONS, LIMITS,
   draftFromUser, payloadFromDraft, validateDraft, isDirty, completeness, todayISO
@@ -18,6 +19,7 @@ const SECTIONS = [
   { id: 'medical', label: 'Medical profile', hint: 'Blood group, allergies, medications', icon: HeartPulse },
   { id: 'emergency', label: 'Emergency contact', hint: 'Who to call when you need help', icon: Phone },
   { id: 'reports', label: 'Test reports', hint: 'Lab results and prescriptions', icon: FileText },
+  { id: 'journal', label: 'Journal', hint: 'Tracking options and reminders', icon: NotebookPen },
   { id: 'account', label: 'Account', hint: 'Password, log out, delete account', icon: ShieldCheck }
 ];
 
@@ -47,7 +49,12 @@ export default function PatientProfile() {
   const baseline = useMemo(() => draftFromUser(user), [user]);
   const [draft, setDraft] = useState(baseline);
   // null = mobile settings index; desktop always shows a section (personal by default)
-  const [active, setActive] = useState(null);
+  // ?section=journal (e.g. from the Cycle tab) opens that section directly
+  const [searchParams] = useSearchParams();
+  const [active, setActive] = useState(() => {
+    const wanted = searchParams.get('section');
+    return SECTIONS.some((x) => x.id === wanted) ? wanted : null;
+  });
   const [showErrors, setShowErrors] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -260,6 +267,10 @@ export default function PatientProfile() {
 
           <Section id="reports" title="Test reports" description="PDF, PNG, JPG or WEBP, up to 2 MB each. Only you can see them." current={current === 'reports'} onBack={backToIndex}>
             <ReportsSection />
+          </Section>
+
+          <Section id="journal" title="Journal" description="Choose what your health journal tracks." current={current === 'journal'} onBack={backToIndex}>
+            <JournalSettings />
           </Section>
 
           <Section id="account" title="Account" current={current === 'account'} onBack={backToIndex}>

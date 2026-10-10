@@ -18,6 +18,10 @@ const Emergency = lazy(() => import('./pages/patient/Emergency'));
 const MonitoringPage = lazy(() => import('./pages/patient/monitoring/MonitoringPage'));
 const MonitoringSetup = lazy(() => import('./pages/patient/monitoring/MonitoringSetup'));
 const ContactPhone = lazy(() => import('./pages/patient/monitoring/ContactPhone'));
+const JournalHub = lazy(() => import('./pages/patient/journal/JournalHub'));
+const LogEditor = lazy(() => import('./pages/patient/journal/LogEditor'));
+const DoctorReport = lazy(() => import('./pages/patient/journal/DoctorReport'));
+const PlanRoutes = lazy(() => import('./pages/patient/journal/plans/PlanRoutes'));
 const OrgDashboard = lazy(() => import('./pages/org/OrgDashboard'));
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const NotFound = lazy(() => import('./pages/NotFound'));
@@ -79,6 +83,14 @@ function App() {
                 <Route path="monitoring" element={<MonitoringPage />} />
                 <Route path="monitoring/setup" element={<MonitoringSetup />} />
                 <Route path="monitoring/contact/:id" element={<ContactPhone />} />
+                {/* Health journal: calendar / cycle / plans tabs, daily log, doctor summary, care plans */}
+                <Route path="journal" element={<Navigate to="/patient/journal/calendar" replace />} />
+                <Route path="journal/log/:date" element={<LogEditor />} />
+                <Route path="journal/report" element={<DoctorReport />} />
+                {/* Exact /journal/plans is the hub's Plans tab; deeper plan screens belong to PlanRoutes */}
+                <Route path="journal/plans" element={<JournalHub tab="plans" />} />
+                <Route path="journal/plans/*" element={<PlanRoutes />} />
+                <Route path="journal/:tab" element={<JournalHub />} />
               </Route>
             </Route>
           </Route>

@@ -33,6 +33,11 @@ const UserSchema = new mongoose.Schema({
   phone: { type: String, default: '', trim: true, maxlength: 30 },
   address: { type: String, default: '', trim: true, maxlength: 200 },
   onboardingCompleted: { type: Boolean, default: false },
+  // Cycle tracking: null = default (on for female profiles), true/false = the patient's choice
+  cycleTracking: {
+    enabled: { type: Boolean, default: null },
+    shareWithNura: { type: Boolean, default: false }
+  },
   medicalProfile: {
     bloodGroup: { type: String, enum: BLOOD_GROUPS, default: '' },
     gender: { type: String, default: '' },

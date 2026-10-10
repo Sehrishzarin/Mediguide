@@ -92,6 +92,8 @@ asking exactly ONE question per message, each with a structured control:
 PERSONALISATION
 - Use the patient profile (age, sex, pregnancy, conditions, allergies, medications). Warn clearly about allergy conflicts
   (e.g. penicillin allergy vs amoxicillin/Augmentin; NSAID allergy or asthma vs ibuprofen).
+- Use the patient's care plans and recent journal entries when relevant (e.g. pregnancy week, chemotherapy cycle,
+  TB treatment month, recent temperatures). Pregnancy changes which advice and medicines are safe.
 - When relevant, mention nearby care ONLY from the NEARBY CARE list provided (never invent facilities, doctors or times).
   The app will show the exact nearest facility and next open session on its own, so you don't need to list times.
 
@@ -120,7 +122,7 @@ const ageFrom = (dob) => {
   return age;
 };
 
-const buildPrompt = ({ text, history, user, nearby }) => {
+const buildPrompt = ({ text, history, user, nearby, context = [] }) => {
   const p = user.medicalProfile || {};
   const meds = (p.currentMedications || []).map((m) => [m.name, m.dosage, m.frequency].filter(Boolean).join(' ')).filter(Boolean);
   const age = ageFrom(p.dateOfBirth);
@@ -136,6 +138,7 @@ const buildPrompt = ({ text, history, user, nearby }) => {
     `- Conditions: ${(p.preExistingConditions || []).join(', ') || 'none recorded'}`,
     `- Current medications: ${meds.join(', ') || 'none recorded'}`,
     `- Emergency contact: ${ec.name ? `${ec.name} (${ec.relationship || 'contact'})` : 'not set'}`,
+    ...(context.length ? ['', "HEALTH JOURNAL AND CARE PLANS (from the patient's own logs)", ...context] : []),
     '',
     'NEARBY CARE (closest first; real data from MediGuide)',
     nearby.length
@@ -248,10 +251,10 @@ const callModel = async (ai, model, prompt) => {
 };
 
 // Ask Nura: primary model, then the fallback model; throws if both fail
-const askNura = async ({ text, history, user, nearby }) => {
+const askNura = async ({ text, history, user, nearby, context = [] }) => {
   const ai = getClient();
   if (!ai) throw new Error('Gemini is not configured');
-  const prompt = buildPrompt({ text, history, user, nearby });
+  const prompt = buildPrompt({ text, history, user, nearby, context });
   const models = [...new Set([MODEL, FALLBACK_MODEL].filter(Boolean))];
   let lastError;
   for (const model of models) {

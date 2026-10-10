@@ -80,6 +80,17 @@ export function AuthProvider({ children }) {
     return res.data;
   }, [setUser]);
 
+  // Re-read the user from the server (e.g. after a care plan changes the pregnancy status)
+  const refreshUser = useCallback(async () => {
+    try {
+      const res = await api.getCurrentUser();
+      setUser(res.data);
+      return res.data;
+    } catch {
+      return null;
+    }
+  }, [setUser]);
+
   const changePassword = useCallback(async (currentPassword, newPassword) => {
     const res = await api.changePassword(currentPassword, newPassword);
     api.setToken(res.token);
@@ -92,8 +103,8 @@ export function AuthProvider({ children }) {
   }, [logout]);
 
   const value = useMemo(
-    () => ({ user, role: user?.role || 'guest', loading, login, register, logout, updateProfile, changePassword, deleteAccount }),
-    [user, loading, login, register, logout, updateProfile, changePassword, deleteAccount]
+    () => ({ user, role: user?.role || 'guest', loading, login, register, logout, updateProfile, refreshUser, changePassword, deleteAccount }),
+    [user, loading, login, register, logout, updateProfile, refreshUser, changePassword, deleteAccount]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

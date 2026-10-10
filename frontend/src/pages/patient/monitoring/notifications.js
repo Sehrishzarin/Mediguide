@@ -56,6 +56,9 @@ function setup() {
       } catch { /* ignore */ }
       try {
         listenerHandle = await LN.addListener('localNotificationActionPerformed', (event) => {
+          // Other features (the daily journal reminder) tag their notifications with extra.kind
+          const kind = event?.notification?.extra?.kind;
+          if (kind && otherHandlers[kind]) { otherHandlers[kind](event); return; }
           if (actionHandler) actionHandler(event?.actionId || 'tap');
         });
       } catch { /* ignore */ }
@@ -64,6 +67,17 @@ function setup() {
   }
   return setupDone;
 }
+
+// Taps on notifications from other features, by extra.kind (e.g. 'journal')
+const otherHandlers = {};
+export function onNotificationKind(kind, handler) {
+  otherHandlers[kind] = handler;
+  if (isNative()) setup();
+  return () => { if (otherHandlers[kind] === handler) delete otherHandlers[kind]; };
+}
+
+// Shared setup for other local-notification features: resolves to the plugin or null (web)
+export const notificationPlugin = () => setup();
 
 // actionId: 'ok' | 'worse' | 'help' | 'tap'
 export function onNotificationAction(handler) {

@@ -2,22 +2,26 @@ import { useEffect, useRef } from 'react';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
-import { Home, CalendarHeart, UserRound, Siren } from 'lucide-react';
+import { Home, CalendarHeart, NotebookPen, UserRound, Siren } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Avatar } from '../../components/ui';
 import Nura from '../../components/nura/Nura';
 import { useMonitoring, startMonitoringPolling, setMonitoringNavigator } from './monitoring/monitoringStore';
 import MonitoringBanner from './monitoring/MonitoringBanner';
+import { onNotificationKind } from './monitoring/notifications';
+import { syncJournalReminder } from './journal/reminder';
+import { localIso } from './journal/dates';
 import styles from './PatientLayout.module.css';
 
 const cx = (...parts) => parts.filter(Boolean).join(' ');
 
-// The four primary destinations, shared by the mobile tab bar and the desktop sidebar.
+// The five primary destinations, shared by the mobile tab bar and the desktop sidebar.
 // `match` decides the active state (and aria-current) so nested routes such as care/* and nura/:id stay highlighted.
 const NAV = [
   { to: '/patient/home', label: 'Home', icon: Home, match: (p) => p.startsWith('/patient/home') },
   { to: '/patient/nura', label: 'Nura', icon: 'nura', match: (p) => p.startsWith('/patient/nura') },
   { to: '/patient/care/book', label: 'Care', icon: CalendarHeart, match: (p) => p.startsWith('/patient/care') },
+  { to: '/patient/journal/calendar', label: 'Journal', icon: NotebookPen, match: (p) => p.startsWith('/patient/journal') },
   { to: '/patient/profile', label: 'Profile', icon: UserRound, match: (p) => p.startsWith('/patient/profile') }
 ];
 
@@ -48,6 +52,14 @@ function PatientLayout() {
   }, [userId]);
   // Lets notification action buttons (I'm OK / Worse / Need help) open the right screen
   useEffect(() => setMonitoringNavigator((to) => navigate(to)), [navigate]);
+  // Daily journal reminder (native): apply this user's setting on this device; a tap opens today's log
+  useEffect(() => { if (userId) syncJournalReminder(userId); }, [userId]);
+  useEffect(() => onNotificationKind('journal', () => navigate(`/patient/journal/log/${localIso()}`)), [navigate]);
+  // Care plan reminders open the plan they belong to
+  useEffect(() => onNotificationKind('plan-milestone', (event) => {
+    const planId = event?.notification?.extra?.planId;
+    navigate(planId ? `/patient/journal/plans/${planId}` : '/patient/journal/plans');
+  }), [navigate]);
 
   // Publish the real rendered heights of the mobile top bar and tab bar as CSS variables
   // (--app-header-h / --app-tabbar-h). Full-height screens such as the Nura chat use them, so

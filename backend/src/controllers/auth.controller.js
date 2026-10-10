@@ -5,6 +5,8 @@ const Organization = require('../models/Organization');
 const CareContact = require('../models/CareContact');
 const Monitoring = require('../models/Monitoring');
 const OutboundMessage = require('../models/OutboundMessage');
+const JournalEntry = require('../models/JournalEntry');
+const CarePlan = require('../models/CarePlan');
 const { asyncHandler, HttpError } = require('../middlewares/error');
 
 // Roles a person may pick for themselves at sign-up. Admin accounts are never self-served.
@@ -73,7 +75,7 @@ exports.getMe = asyncHandler(async (req, res) => {
 // @route PUT /api/auth/profile
 // Partial update: only the fields that are sent are changed.
 exports.updateProfile = asyncHandler(async (req, res) => {
-  const { name, phone, address, onboardingCompleted, medicalProfile } = req.body;
+  const { name, phone, address, onboardingCompleted, medicalProfile, cycleTracking } = req.body;
   const $set = {};
 
   if (name !== undefined) {
@@ -83,6 +85,10 @@ exports.updateProfile = asyncHandler(async (req, res) => {
   if (phone !== undefined) $set.phone = phone;
   if (address !== undefined) $set.address = address;
   if (onboardingCompleted !== undefined) $set.onboardingCompleted = Boolean(onboardingCompleted);
+  if (cycleTracking && typeof cycleTracking === 'object') {
+    if (cycleTracking.enabled !== undefined) $set['cycleTracking.enabled'] = cycleTracking.enabled === null ? null : Boolean(cycleTracking.enabled);
+    if (cycleTracking.shareWithNura !== undefined) $set['cycleTracking.shareWithNura'] = Boolean(cycleTracking.shareWithNura);
+  }
 
   if (medicalProfile && typeof medicalProfile === 'object') {
     for (const key of MEDICAL_FIELDS) {
@@ -146,6 +152,9 @@ exports.deleteAccount = asyncHandler(async (req, res) => {
   await Monitoring.deleteMany({ user: user._id });
   await CareContact.deleteMany({ owner: user._id });
   await OutboundMessage.deleteMany({ owner: user._id });
+  // Journal, cycle and care plans
+  await JournalEntry.deleteMany({ user: user._id });
+  await CarePlan.deleteMany({ user: user._id });
   await user.deleteOne();
 
   res.json({ success: true, message: 'Your account and data have been deleted.' });

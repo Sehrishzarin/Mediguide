@@ -8,6 +8,8 @@ import Nura from '../../components/nura/Nura';
 import { loadSessions } from './chatStorage';
 import { useMonitoring } from './monitoring/monitoringStore';
 import CheckInHomeCard from './monitoring/CheckInHomeCard';
+import TodayCard from './journal/TodayCard';
+import PlanHomeCard from './journal/plans/PlanHomeCard';
 import { slotToDate, formatSlotDate, formatSlotTime } from './care/slotTime';
 import { friendlyError } from './care/errors';
 import styles from './PatientHome.module.css';
@@ -202,6 +204,8 @@ function PatientHome() {
             status={monitoring.status}
             className={monitoring.data ? styles.areaCheckinActive : styles.areaCheckin}
           />
+          <TodayCard compact className={styles.areaToday} />
+          <div className={styles.areaPlan}><PlanHomeCard /></div>
           <NextAppointment className={styles.areaAppt} />
 
           {missing.length > 0 && (

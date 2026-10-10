@@ -37,6 +37,16 @@
   --info: #2457C5;
   --info-soft: #EAF0FD;
 
+  /* ── Colour: health journal (calm; red stays reserved for alerts) ── */
+  --period: #D4607A;        /* logged period days */
+  --period-soft: #FBE6EB;
+  --period-ink: #962F49;    /* text on period-soft */
+  --fertile: #2A9D8F;       /* fertile window / ovulation marker */
+  --fertile-soft: #E2F3F0;
+  --mood-low: #C8913A;      /* muted amber */
+  --mood-mid: #98A6B0;      /* neutral */
+  --mood-good: #1F9A8A;     /* teal */
+
   /* ── Type ── */
   --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --fs-xs: 0.75rem;   /* 12 */

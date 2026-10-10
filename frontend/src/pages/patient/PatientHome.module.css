@@ -10,11 +10,14 @@
 .side { display: contents; }
 .areaNura { order: 1; }
 .areaCheckinActive { order: 2; }
-.areaAppt { order: 3; }
-.areaActions { order: 4; }
-.areaCheckin { order: 5; }
-.areaNudge { order: 6; }
-.areaRecent { order: 7; }
+.areaToday { order: 3; }
+.areaPlan { order: 4; }
+.areaPlan:empty { display: none; }
+.areaAppt { order: 5; }
+.areaActions { order: 6; }
+.areaCheckin { order: 7; }
+.areaNudge { order: 8; }
+.areaRecent { order: 9; }
 
 .textLink {
   display: inline-flex;

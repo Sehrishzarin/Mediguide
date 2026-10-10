@@ -181,3 +181,31 @@ export const answerCheckIn = (checkInId, answer, location) =>
 export const cancelCheckInAlert = (location) => request('/monitoring/ok', { method: 'POST', body: location ? { location } : {} });
 export const updateMonitoringLocation = (location) => request('/monitoring/location', { method: 'POST', body: location });
 export const stopMonitoring = () => request('/monitoring/stop', { method: 'POST' });
+
+// ---------- Care plans (long-term condition programs: timelines + daily tracking) ----------
+export const getPlanTemplates = () => request('/plans/templates');
+export const getPlans = () => request('/plans');
+export const createPlan = (payload) => request('/plans', { method: 'POST', body: payload });
+export const updatePlanMilestone = (planId, milestoneId, patch) =>
+  request(`/plans/${encodeURIComponent(planId)}/milestones/${encodeURIComponent(milestoneId)}`, { method: 'PATCH', body: patch });
+export const addPlanMilestone = (planId, payload) =>
+  request(`/plans/${encodeURIComponent(planId)}/milestones`, { method: 'POST', body: payload });
+export const deletePlanMilestone = (planId, milestoneId) =>
+  request(`/plans/${encodeURIComponent(planId)}/milestones/${encodeURIComponent(milestoneId)}`, { method: 'DELETE' });
+export const endPlan = (planId, status) => request(`/plans/${encodeURIComponent(planId)}/end`, { method: 'POST', body: { status } });
+
+// ---------- Health journal (daily logs) and cycle tracking ----------
+// Dates are local calendar dates (YYYY-MM-DD); the server's "today" is the source of truth.
+export const getJournalEntries = (from, to) => {
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  const qs = params.toString();
+  return request(`/journal${qs ? `?${qs}` : ''}`);
+};
+export const getJournalToday = () => request('/journal/today');
+export const saveJournalEntry = (date, entry) => request(`/journal/${encodeURIComponent(date)}`, { method: 'PUT', body: entry });
+export const deleteJournalEntry = (date) => request(`/journal/${encodeURIComponent(date)}`, { method: 'DELETE' });
+export const getJournalReport = (days = 14) => request(`/journal/report?days=${encodeURIComponent(days)}`);
+export const getCycle = () => request('/cycle');
+export const updateCycleSettings = (payload) => request('/cycle/settings', { method: 'PUT', body: payload });

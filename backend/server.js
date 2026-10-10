@@ -14,6 +14,7 @@ const slotRoutes = require('./src/routes/slot.routes');
 const fileRoutes = require('./src/routes/file.routes');
 const aiRoutes = require('./src/routes/ai.routes');
 const monitoringRoutes = require('./src/routes/monitoring.routes');
+const { journalRouter, cycleRouter, plansRouter } = require('./src/routes/journal.routes');
 const { startScheduler } = require('./src/services/monitoring');
 const { notFound, errorHandler } = require('./src/middlewares/error');
 
@@ -60,6 +61,9 @@ app.use('/api/slots', slotRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/monitoring', monitoringRoutes);
+app.use('/api/journal', journalRouter);
+app.use('/api/cycle', cycleRouter);
+app.use('/api/plans', plansRouter);
 
 app.get('/', (req, res) => res.send('MediGuide Backend API is active.'));
 

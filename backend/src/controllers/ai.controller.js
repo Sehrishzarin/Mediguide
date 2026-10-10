@@ -1,6 +1,34 @@
 const nura = require('../services/nura');
 const assessment = require('../services/assessment');
 const gemini = require('../services/gemini');
+const CarePlan = require('../models/CarePlan');
+const JournalEntry = require('../models/JournalEntry');
+const plansSvc = require('../services/plans');
+const journalSvc = require('../services/journal');
+
+// Short, factual lines about the patient's care plans, recent journal and (if shared) cycle
+const healthContext = async (reqUser) => {
+  const today = journalSvc.todayIso();
+  const [plans, recent] = await Promise.all([
+    CarePlan.find({ user: reqUser._id, status: 'active' }),
+    JournalEntry.find({ user: reqUser._id, date: { $gte: plansSvc.addDays(today, -60) } }).sort({ date: -1 })
+  ]);
+  const lines = plans.map((p) => {
+    const pr = plansSvc.progress(p, today);
+    const next = [...p.milestones].filter((x) => !x.doneAt && x.dueDate >= today).sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+    return `- Care plan: ${plansSvc.PLANS[p.type].title}, ${pr.label}${pr.lowImmunity ? ' (low-immunity days: fever is urgent)' : ''}${next ? `; next: ${next.title} on ${next.dueDate}` : ''}`;
+  });
+  recent.slice(0, 3).forEach((e) => {
+    const bits = [e.mood ? `mood ${e.mood}/5` : '', e.energy ? `energy ${e.energy}/5` : '', e.pain != null ? `pain ${e.pain}/5` : '', e.temperature ? `${e.temperature}°C` : '', (e.symptoms || []).length ? `symptoms: ${e.symptoms.join(', ')}` : '', e.notes ? `note: "${e.notes.slice(0, 80)}"` : ''].filter(Boolean);
+    if (bits.length) lines.push(`- Journal ${e.date}: ${bits.join('; ')}`);
+  });
+  const pregnant = plans.some((p) => p.type === 'pregnancy');
+  if (!pregnant && journalSvc.cycleEnabled(reqUser) && reqUser.cycleTracking && reqUser.cycleTracking.shareWithNura) {
+    const cs = journalSvc.cycleSummary(recent, today);
+    if (cs.hasData) lines.push(`- Cycle: day ${cs.cycleDay}, phase ${cs.phase}, next period expected ${cs.predictions.nextPeriodStart}${cs.late ? `, ${cs.late.days} days late` : ''}`);
+  }
+  return lines;
+};
 
 // Emergency keywords list (includes common misspellings, concatenated words, and severe triggers)
 const EMERGENCY_KEYWORDS = [
@@ -340,8 +368,11 @@ The nearest hospital I know of is **${care.nearest.name}**, about ${care.nearest
   // ── Primary path: Gemini (when configured) ─────────────────────────────
   if (gemini.isConfigured()) {
     try {
-      const nearby = await assessment.nearbyFacilities(location).catch(() => []);
-      const result = await gemini.askNura({ text: symptomText, history: chatHistory, user, nearby });
+      const [nearby, context] = await Promise.all([
+        assessment.nearbyFacilities(location).catch(() => []),
+        healthContext(req.user).catch(() => [])
+      ]);
+      const result = await gemini.askNura({ text: symptomText, history: chatHistory, user, nearby, context });
       // Facilities and sessions come from our database, never from the model
       if (result.summary) {
         const care = await assessment.findCare(result.summary.level, result.summary.specialty, location).catch(() => ({ nearest: null, nextSlot: null }));
