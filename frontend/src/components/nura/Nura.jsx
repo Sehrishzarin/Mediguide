@@ -1,7 +1,7 @@
 // Nura — MediGuide's health assistant. A soft, morphing blob with a face.
 //
 // <Nura size={48} mood="idle" />
-// mood: idle | listening | thinking | speaking | happy | concerned
+// mood: idle | listening | thinking | speaking | happy | empathetic | concerned
 // `still` disables motion (e.g. in long lists). Motion is also off for prefers-reduced-motion.
 import s from './Nura.module.css';
 
@@ -13,6 +13,17 @@ function Eyes({ mood }) {
       <g className={s.stroke}>
         <path d="M33 47 Q38 41 43 47" />
         <path d="M57 47 Q62 41 67 47" />
+      </g>
+    );
+  }
+  if (mood === 'empathetic') {
+    // Soft, gently lowered eyes
+    return (
+      <g>
+        <ellipse cx="38" cy="47.5" rx="4.4" ry="4.6" className={s.pupil} />
+        <ellipse cx="62" cy="47.5" rx="4.4" ry="4.6" className={s.pupil} />
+        <circle cx="39.4" cy="46" r="1.3" className={s.shine} />
+        <circle cx="63.4" cy="46" r="1.3" className={s.shine} />
       </g>
     );
   }
@@ -40,6 +51,8 @@ function Mouth({ mood }) {
       return <path d="M42 66 Q50 60.5 58 66" className={s.stroke} />;
     case 'happy':
       return <path d="M40 59 Q50 70 60 59 Z" className={s.mouthFill} />;
+    case 'empathetic':
+      return <path d="M44 62.5 Q50 66 56 62.5" className={s.stroke} />;
     case 'listening':
       return <ellipse cx="50" cy="63.5" rx="3.2" ry="2.6" className={s.mouthFill} />;
     default:
@@ -60,6 +73,12 @@ export default function Nura({ size = 48, mood = 'idle', still = false, classNam
       <span className={s.body}>
         <span className={s.sheen} />
         <svg viewBox="0 0 100 100" className={s.face}>
+          {mood === 'empathetic' && (
+            <g className={s.stroke}>
+              <path d="M33 38.5 L42 36.5" />
+              <path d="M67 38.5 L58 36.5" />
+            </g>
+          )}
           {mood === 'concerned' && (
             <g className={s.stroke}>
               <path d="M32 38 L43 34" />

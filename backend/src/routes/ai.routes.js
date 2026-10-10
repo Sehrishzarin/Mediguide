@@ -2,6 +2,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { evaluateTriageWithAI } = require('../controllers/ai.controller');
 const { protect } = require('../middlewares/auth');
+const { asyncHandler } = require('../middlewares/error');
 
 const router = express.Router();
 
@@ -14,6 +15,7 @@ const triageLimiter = rateLimit({
   message: { success: false, message: 'You are sending messages too quickly. Please wait a moment.' }
 });
 
-router.post('/triage', protect, triageLimiter, evaluateTriageWithAI);
+// asyncHandler: an unexpected error returns a 500 instead of crashing the server
+router.post('/triage', protect, triageLimiter, asyncHandler(evaluateTriageWithAI));
 
 module.exports = router;

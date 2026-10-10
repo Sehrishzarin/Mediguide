@@ -155,7 +155,29 @@ export const openFile = async (id, filename = 'document') => {
 };
 
 // ---------- AI triage ----------
-export const submitTriageSymptom = async (symptomText, chatHistory = []) => {
-  const res = await request('/ai/triage', { method: 'POST', body: { symptomText, chatHistory } });
+// Optional context: `assessment` (opaque state from the last Nura reply), `answer`
+// ({ id, value } for a tapped structured input) and `location` ({ lat, lng }).
+export const submitTriageSymptom = async (symptomText, chatHistory = [], { assessment, answer, location } = {}) => {
+  const body = { symptomText, chatHistory };
+  if (assessment) body.assessment = assessment;
+  if (answer) body.answer = answer;
+  if (location) body.location = location;
+  const res = await request('/ai/triage', { method: 'POST', body });
   return res.data;
 };
+
+// ---------- Nura Check-In (scheduled check-ins with server-side escalation) ----------
+// SMS and calls to contacts run in demo mode on the server: they are stored, not sent.
+export const getCheckInContacts = () => request('/monitoring/contacts');
+export const addCheckInContact = (payload) => request('/monitoring/contacts', { method: 'POST', body: payload });
+export const resendCheckInInvite = (id) => request(`/monitoring/contacts/${encodeURIComponent(id)}/resend`, { method: 'POST' });
+export const removeCheckInContact = (id) => request(`/monitoring/contacts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const getContactMessages = (id) => request(`/monitoring/contacts/${encodeURIComponent(id)}/messages`);
+export const sendContactReply = (id, text) => request(`/monitoring/contacts/${encodeURIComponent(id)}/reply`, { method: 'POST', body: { text } });
+export const getCurrentMonitoring = () => request('/monitoring/current');
+export const startMonitoring = (payload) => request('/monitoring', { method: 'POST', body: payload });
+export const answerCheckIn = (checkInId, answer, location) =>
+  request(`/monitoring/checkins/${encodeURIComponent(checkInId)}/answer`, { method: 'POST', body: location ? { answer, location } : { answer } });
+export const cancelCheckInAlert = (location) => request('/monitoring/ok', { method: 'POST', body: location ? { location } : {} });
+export const updateMonitoringLocation = (location) => request('/monitoring/location', { method: 'POST', body: location });
+export const stopMonitoring = () => request('/monitoring/stop', { method: 'POST' });

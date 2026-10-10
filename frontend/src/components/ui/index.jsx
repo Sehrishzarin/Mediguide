@@ -48,11 +48,14 @@ export function Card({ as: Tag = 'section', padding = 'md', interactive, classNa
   );
 }
 
-// Page title row. `back` = route to go back to (shows a back button).
-export function PageHeader({ title, subtitle, back, actions, className }) {
+// Page title row. `back` = route to go back to (shows a back button);
+// `onBack` = click handler instead (e.g. history back with a fallback).
+export function PageHeader({ title, subtitle, back, onBack, actions, className }) {
   return (
     <header className={cx(s.pageHeader, className)}>
-      {back && <IconButton icon={ChevronLeft} label="Back" to={back} className={s.backBtn} />}
+      {onBack
+        ? <IconButton icon={ChevronLeft} label="Back" onClick={onBack} className={s.backBtn} />
+        : back && <IconButton icon={ChevronLeft} label="Back" to={back} className={s.backBtn} />}
       <div className={s.pageHeaderText}>
         <h1 className={s.pageTitle}>{title}</h1>
         {subtitle && <p className={s.pageSubtitle}>{subtitle}</p>}
@@ -194,6 +197,28 @@ export function Segmented({ options, value, onChange, label, className }) {
         </button>
       ))}
     </div>
+  );
+}
+
+// On/off switch row: label + optional description, the whole row is the 44px target.
+export function Switch({ checked, onChange, label, description, disabled, className }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={Boolean(checked)}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cx(s.switchRow, className)}
+    >
+      <span className={s.switchText}>
+        <span className={s.switchLabel}>{label}</span>
+        {description && <span className={s.switchDesc}>{description}</span>}
+      </span>
+      <span className={cx(s.switchTrack, checked && s.switchOn)} aria-hidden="true">
+        <span className={s.switchThumb} />
+      </span>
+    </button>
   );
 }
 

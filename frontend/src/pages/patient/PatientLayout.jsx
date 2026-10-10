@@ -6,6 +6,8 @@ import { Home, CalendarHeart, UserRound, Siren } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Avatar } from '../../components/ui';
 import Nura from '../../components/nura/Nura';
+import { useMonitoring, startMonitoringPolling, setMonitoringNavigator } from './monitoring/monitoringStore';
+import MonitoringBanner from './monitoring/MonitoringBanner';
 import styles from './PatientLayout.module.css';
 
 const cx = (...parts) => parts.filter(Boolean).join(' ');
@@ -36,6 +38,16 @@ function PatientLayout() {
   const { pathname } = useLocation();
   const headerRef = useRef(null);
   const tabBarRef = useRef(null);
+  const userId = user?.id;
+  const monitoring = useMonitoring(userId);
+
+  // Nura Check-In: one shared poll of the monitoring state while signed in
+  useEffect(() => {
+    if (!userId) return undefined;
+    return startMonitoringPolling(userId);
+  }, [userId]);
+  // Lets notification action buttons (I'm OK / Worse / Need help) open the right screen
+  useEffect(() => setMonitoringNavigator((to) => navigate(to)), [navigate]);
 
   // Publish the real rendered heights of the mobile top bar and tab bar as CSS variables
   // (--app-header-h / --app-tabbar-h). Full-height screens such as the Nura chat use them, so
@@ -81,6 +93,7 @@ function PatientLayout() {
   }, [pathname, navigate]);
 
   const inEmergency = pathname.startsWith('/patient/emergency');
+  const showBanner = !pathname.startsWith('/patient/monitoring');
   const name = user?.name || 'Your profile';
 
   return (
@@ -131,20 +144,26 @@ function PatientLayout() {
 
       <div className={styles.main}>
         {/* ── Mobile top app bar ── */}
-        <header ref={headerRef} className={styles.topBar}>
-          <Link to="/patient/home" className={styles.brand}>
-            <img src="/logo.jpg" alt="" className={styles.brandLogoSm} />
-            <span className={styles.brandName}>MediGuide</span>
-          </Link>
-          <Link
-            to="/patient/emergency"
-            className={cx(styles.sos, inEmergency && styles.sosActive)}
-            aria-label="SOS: emergency help"
-          >
-            <Siren size={18} aria-hidden="true" />
-            <span>SOS</span>
-          </Link>
+        <header ref={headerRef} className={styles.topBarWrap}>
+          <div className={styles.topBar}>
+            <Link to="/patient/home" className={styles.brand}>
+              <img src="/logo.jpg" alt="" className={styles.brandLogoSm} />
+              <span className={styles.brandName}>MediGuide</span>
+            </Link>
+            <Link
+              to="/patient/emergency"
+              className={cx(styles.sos, inEmergency && styles.sosActive)}
+              aria-label="SOS: emergency help"
+            >
+              <Siren size={18} aria-hidden="true" />
+              <span>SOS</span>
+            </Link>
+          </div>
+          {/* Inside the measured header on mobile, so full-height screens leave room for it */}
+          {showBanner && <MonitoringBanner monitoring={monitoring.data} />}
         </header>
+
+        {showBanner && <MonitoringBanner monitoring={monitoring.data} className={styles.desktopBanner} />}
 
         <main className={styles.content}>
           <Outlet />

@@ -5,10 +5,12 @@ import { ChevronLeft, SquarePen, RotateCw, AlertCircle, CalendarPlus, MapPin, Ph
 import { IconButton, Button, Chip, ChipRow } from '../../../components/ui';
 import Nura from '../../../components/nura/Nura';
 import { newId, bookableSpecialty } from '../chatStorage';
-import { sendMessage, retryMessage } from './nuraStore';
+import { sendMessage, retryMessage, resendLast } from './nuraStore';
+import { moodForResult } from './mood';
 import MessageBubble from './MessageBubble';
 import NuraWelcome from './NuraWelcome';
 import Composer from './Composer';
+import AnswerInput from './AnswerInput';
 import s from './ChatView.module.css';
 
 const NEAR_BOTTOM_PX = 120;
@@ -35,18 +37,17 @@ export default function ChatView({ userId, user, chatId, session, pending, error
   const firstName = (user?.name || '').trim().split(/\s+/)[0] || '';
   const emergencyPhone = user?.medicalProfile?.emergencyContact?.phone || '';
 
-  const concerned = Boolean(lastResult && (lastResult.emergency_flag || lastResult.urgency_level === 'high'));
-  let mood = 'idle';
+  // Listening / thinking / speaking while active, then hold the expression of Nura's last reply
+  let mood = lastMessage && lastMessage === lastAi ? moodForResult(lastResult) : 'idle';
   if (listening) mood = 'listening';
   else if (pending) mood = 'thinking';
-  else if (concerned) mood = 'concerned';
-  else if (speaking) mood = 'speaking';
+  else if (speaking && mood !== 'concerned') mood = 'speaking';
 
   // ── Sending ──
-  const send = useCallback((text) => {
+  const send = useCallback((text, answer) => {
     if (pending) return false;
     const id = session ? session.id : newId();
-    const ok = sendMessage(userId, id, text);
+    const ok = sendMessage(userId, id, text, { answer });
     if (ok) {
       nearBottomRef.current = true;
       if (!session) navigate(`/patient/nura/${id}`, { replace: chatId === 'new' });
@@ -58,20 +59,33 @@ export default function ChatView({ userId, user, chatId, session, pending, error
   const book = useCallback((specialty) => {
     navigate('/patient/care/book', { state: specialty ? { specialty } : undefined });
   }, [navigate]);
+  const bookSlot = useCallback((summary) => {
+    const state = { specialty: bookableSpecialty(summary) || undefined };
+    if (summary.nextSlot) state.slotId = summary.nextSlot.id;
+    if (summary.nearest) state.orgName = summary.nearest.name;
+    navigate('/patient/care/book', { state });
+  }, [navigate]);
   const openEmergency = useCallback(() => navigate('/patient/emergency'), [navigate]);
   const openNearby = useCallback(() => navigate('/patient/care/nearby'), [navigate]);
 
   const pickChip = (text) => {
     const action = chipAction(text, emergencyPhone);
     if (!action) { send(text); return; }
-    if (action.type === 'book') book(bookableSpecialty(lastResult));
+    if (action.type === 'book') {
+      if (lastResult?.summary && lastResult.summary.level !== 'emergency') bookSlot(lastResult.summary);
+      else book(bookableSpecialty(lastResult));
+    }
     else if (action.type === 'nearby') openNearby();
     else if (action.type === 'call') window.location.assign(`tel:${emergencyPhone.replace(/[^\d+]/g, '')}`);
   };
 
+  // A structured question (assessment) is active only on the latest Nura message
+  const activeInput = !pending && lastMessage && lastMessage === lastAi ? lastResult?.input || null : null;
+  const answer = useCallback((value, text) => send(text, value), [send]);
+
   // Suggested replies come from the latest Nura reply, and only while it is the last message
   const suggestions = useMemo(() => {
-    if (!lastResult || lastMessage !== lastAi || pending) return [];
+    if (!lastResult || lastMessage !== lastAi || pending || lastResult.input) return [];
     if (lastResult.suggested_replies?.length) return lastResult.suggested_replies;
     return lastResult.trigger_question ? [lastResult.trigger_question] : [];
   }, [lastResult, lastMessage, lastAi, pending]);
@@ -84,18 +98,20 @@ export default function ChatView({ userId, user, chatId, session, pending, error
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (el && messages.length > 0 && nearBottomRef.current) el.scrollTop = el.scrollHeight;
-  }, [messages.length, pending, error, suggestions.length]);
+  }, [messages.length, pending, error, suggestions.length, activeInput]);
 
   const rendered = useMemo(() => messages.map((m, i) => (
     <MessageBubble
       key={m.id}
       message={m}
       showAvatar={m.sender === 'ai' && messages[i - 1]?.sender !== 'ai'}
+      latest={m === lastAi && !pending}
       onBook={book}
+      onBookSlot={bookSlot}
       onEmergency={openEmergency}
       onNearby={openNearby}
     />
-  )), [messages, book, openEmergency, openNearby]);
+  )), [messages, lastAi, pending, book, bookSlot, openEmergency, openNearby]);
 
   const isEmpty = messages.length === 0;
 
@@ -121,11 +137,18 @@ export default function ChatView({ userId, user, chatId, session, pending, error
         ) : (
           <div className={s.messages} role="log" aria-label="Conversation with Nura">
             {rendered}
+            {activeInput && <AnswerInput key={lastAi.id} input={activeInput} onAnswer={answer} disabled={pending} />}
             {pending && (
               <div className={s.typingRow} role="status">
                 <Nura size={28} mood="thinking" still className={s.typingAvatar} />
                 <div className={s.typing} aria-hidden="true"><i /><i /><i /></div>
                 <span className="sr-only">Nura is typing</span>
+              </div>
+            )}
+            {!error && !pending && lastMessage?.sender === 'user' && (
+              <div className={s.errorRow}>
+                <p className={s.noReply}>Nura did not get to reply to this.</p>
+                <Button variant="secondary" size="sm" icon={RotateCw} onClick={() => resendLast(userId, session.id)}>Ask again</Button>
               </div>
             )}
             {error && !pending && (
@@ -150,7 +173,7 @@ export default function ChatView({ userId, user, chatId, session, pending, error
             })}
           </ChipRow>
         )}
-        <Composer onSend={send} disabled={pending} onListeningChange={setListening} inputRef={inputRef} />
+        <Composer onSend={send} disabled={pending} placeholder={activeInput ? 'Or type your answer…' : undefined} onListeningChange={setListening} inputRef={inputRef} />
         <p className={s.disclaimer}>Nura gives guidance, not a diagnosis. In an emergency call 1122.</p>
       </div>
     </div>

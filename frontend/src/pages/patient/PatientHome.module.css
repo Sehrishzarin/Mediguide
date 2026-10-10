@@ -9,10 +9,12 @@
 .grid { display: flex; flex-direction: column; gap: var(--sp-6); }
 .side { display: contents; }
 .areaNura { order: 1; }
-.areaAppt { order: 2; }
-.areaActions { order: 3; }
-.areaNudge { order: 4; }
-.areaRecent { order: 5; }
+.areaCheckinActive { order: 2; }
+.areaAppt { order: 3; }
+.areaActions { order: 4; }
+.areaCheckin { order: 5; }
+.areaNudge { order: 6; }
+.areaRecent { order: 7; }
 
 .textLink {
   display: inline-flex;

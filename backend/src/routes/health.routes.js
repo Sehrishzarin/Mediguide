@@ -1,5 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const gemini = require('../services/gemini');
 
 const router = express.Router();
 
@@ -14,6 +15,7 @@ router.get('/health', (req, res) => {
   res.status(ok ? 200 : 503).json({
     status: ok ? 'success' : 'degraded',
     database,
+    ai: gemini.isConfigured() ? `gemini (${gemini.MODEL})` : 'local engine (set GEMINI_API_KEY)',
     timestamp: new Date().toISOString()
   });
 });

@@ -1,5 +1,6 @@
-const { GoogleGenAI } = require('@google/genai');
 const nura = require('../services/nura');
+const assessment = require('../services/assessment');
+const gemini = require('../services/gemini');
 
 // Emergency keywords list (includes common misspellings, concatenated words, and severe triggers)
 const EMERGENCY_KEYWORDS = [
@@ -293,118 +294,88 @@ exports.evaluateTriageWithAI = async (req, res) => {
   const send = (source, data) => res.status(200).json({
     success: true,
     source,
-    data: { suggested_replies: [], cta: null, ...data }
+    data: { suggested_replies: [], cta: null, input: null, summary: null, assessment: null, ...data }
   });
+
+  // Optional context from the client: the patient's location and an in-progress assessment
+  const loc = req.body.location;
+  const location = loc && Number.isFinite(Number(loc.lat)) && Number.isFinite(Number(loc.lng)) &&
+    Math.abs(Number(loc.lat)) <= 90 && Math.abs(Number(loc.lng)) <= 180
+    ? { lat: Number(loc.lat), lng: Number(loc.lng) }
+    : null;
+  const activeAssessment = req.body.assessment && typeof req.body.assessment === 'object' && req.body.assessment.step
+    ? req.body.assessment
+    : null;
+  const structuredAnswer = req.body.answer && typeof req.body.answer === 'object' ? req.body.answer : null;
 
   const intent = nura.detectIntent(symptomText);
 
   // Safety first: crisis and red-flag symptoms are always answered locally and immediately
-  if (intent.type === 'crisis') return send('nura_safety', nura.conversationalReply(intent, symptomText, user));
+  if (intent.type === 'crisis') return send('nura_safety', nura.conversationalReply(intent, symptomText, user, chatHistory));
   if (hasEmergencyKeyword(symptomText)) {
+    const care = await assessment.findCare('emergency', 'Emergency', location).catch(() => ({ nearest: null }));
+    const local = evaluateLocalTriage(symptomText, patientProfile, chatHistory);
     return send('nura_safety', {
-      ...evaluateLocalTriage(symptomText, patientProfile, chatHistory),
+      ...local,
+      mood: 'concerned',
+      conversational_response: `I'm really sorry you're going through this. ${local.conversational_response}${care.nearest ? `
+
+The nearest hospital I know of is **${care.nearest.name}**, about ${care.nearest.distanceKm} km away.` : ''}`,
+      summary: {
+        level: 'emergency',
+        title: 'Get emergency care now',
+        message: 'These can be signs of a serious condition. Call 1122 or go to the nearest emergency department now.',
+        reasons: [`You said: "${symptomText.length > 90 ? `${symptomText.slice(0, 90)}…` : symptomText}"`],
+        advice: [],
+        warnings: [],
+        medicineNotes: [],
+        specialty: 'Emergency Department',
+        nearest: care.nearest,
+        nextSlot: null
+      },
       suggested_replies: ['Show me the nearest hospital', 'Call my emergency contact']
     });
   }
-  // Greetings never need the model
+
+  // ── Primary path: Gemini (when configured) ─────────────────────────────
+  if (gemini.isConfigured()) {
+    try {
+      const nearby = await assessment.nearbyFacilities(location).catch(() => []);
+      const result = await gemini.askNura({ text: symptomText, history: chatHistory, user, nearby });
+      // Facilities and sessions come from our database, never from the model
+      if (result.summary) {
+        const care = await assessment.findCare(result.summary.level, result.summary.specialty, location).catch(() => ({ nearest: null, nextSlot: null }));
+        result.summary.nearest = care.nearest;
+        result.summary.nextSlot = care.nextSlot;
+        if (result.cta && care.nextSlot) result.cta.slotId = care.nextSlot.id;
+      }
+      return send('gemini_ai', result);
+    } catch (error) {
+      console.error('Gemini unavailable, using the local engine:', error.message);
+    }
+  }
+
+  // ── Fallback: local engine (no key, timeout or model error) ─────────────
+  // Guided symptom assessment: continue one in progress, or start one for a new symptom
+  if (activeAssessment) {
+    const next = await assessment.answer(activeAssessment, symptomText, structuredAnswer, user, location);
+    if (next) return send('nura_assessment', next);
+  }
+
   if (intent.type === 'greeting' || intent.type === 'thanks') {
-    return send('nura_local', nura.conversationalReply(intent, symptomText, user));
+    return send('nura_local', nura.conversationalReply(intent, symptomText, user, chatHistory));
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  const localAnswer = () => {
-    const conversational = nura.conversationalReply(intent, symptomText, user);
-    if (conversational) return conversational;
-    const inputType = categorizeInput(symptomText, chatHistory);
-    if (inputType === 'off_topic') return nura.otherReply();
-    return {
-      ...evaluateLocalTriage(symptomText, patientProfile, chatHistory),
-      suggested_replies: ['It started today', 'It has lasted a few days', 'It is getting worse']
-    };
-  };
-
-  if (!apiKey || apiKey === 'your_gemini_api_key_here') {
-    return send('nura_local', localAnswer());
+  if (!['profile', 'medication', 'appointment', 'identity', 'wellness'].includes(intent.type) && assessment.isStart(symptomText)) {
+    const first = await assessment.start(symptomText, user);
+    if (first) return send('nura_assessment', first);
   }
 
-  try {
-    const ai = new GoogleGenAI({ apiKey });
-
-    const systemInstruction = `
-You are Nura, MediGuide's warm, professional AI health assistant, chatting with a patient in Pakistan.
-
-WHAT YOU DO
-- Hold a natural health conversation: symptoms, general health questions, medications (general info only),
-  wellness (sleep, stress, nutrition, hydration, exercise, weight), explaining medical terms, and helping the
-  patient decide where to get care (home care, clinic, or emergency).
-- Use the patient's medical profile (allergies, conditions, medications, pregnancy, age) to personalise advice,
-  and point out conflicts (e.g. a medicine they are allergic to).
-- Ask one focused follow-up question when you need more detail (onset, severity 1-10, duration, other symptoms).
-
-SAFETY RULES
-- Never give a diagnosis as fact, never prescribe or set doses. Recommend the right specialist instead.
-- Re-assess urgency on EVERY message. If red-flag symptoms appear (chest pain, severe breathlessness, stroke
-  signs, heavy bleeding, fainting, seizures, poisoning, suicidal thoughts), set urgency_level "high",
-  emergency_flag true, show_map true, and tell them to call 1122 or go to the nearest emergency department.
-- Keep replies concise (under ~150 words), friendly and clear. Use **bold** for key points and "• " bullets.
-  No emojis.
-- If the message is unrelated to health, set is_non_medical true and gently steer back to health topics.
-
-Respond ONLY with valid JSON matching this schema:
-{
-  "is_non_medical": boolean,
-  "category": "short topic label",
-  "specialty": "recommended doctor specialty, or empty",
-  "urgency_level": "high | medium | low | none",
-  "hospital_recommendation": "HOSPITAL VISIT STRONGLY URGED (Emergency Care Required) | CLINIC VISIT RECOMMENDED | HOME CARE FIRST (Clinic Visit Optional) | NO HOSPITAL VISIT NEEDED (Safe for Home Care) | empty",
-  "show_map": boolean,
-  "profile_impact_summary": "how the patient's profile affects this advice, or empty",
-  "conversational_response": "your reply to the patient",
-  "trigger_question": "one follow-up question, or empty",
-  "precautionary_advice": "short safety/self-care advice, or empty",
-  "emergency_flag": boolean,
-  "suggested_replies": ["2-3 short replies the patient might tap next"]
-}
-`;
-
-    const historyFormatted = chatHistory
-      .map((m) => `${m.sender === 'user' ? 'Patient' : 'Nura'}: ${m.text}`)
-      .join('\n');
-
-    const meds = (patientProfile.currentMedications || []).map((m) => (typeof m === 'string' ? m : m.name)).filter(Boolean);
-    const promptText = `
-PATIENT
-- Name: ${req.user.name || 'Not specified'}
-- Gender: ${patientProfile.gender || 'Not specified'}
-- Date of birth: ${patientProfile.dateOfBirth || 'Not specified'}
-- Height / weight: ${patientProfile.height ? `${patientProfile.height} cm` : '?'} / ${patientProfile.weight ? `${patientProfile.weight} kg` : '?'}
-- Pregnancy status: ${patientProfile.pregnancyStatus || 'N/A'}
-- Allergies: ${(patientProfile.allergies || []).join(', ') || 'None recorded'}
-- Conditions: ${(patientProfile.preExistingConditions || []).join(', ') || 'None recorded'}
-- Medications: ${meds.join(', ') || 'None recorded'}
-
-CONVERSATION SO FAR
-${historyFormatted || '(new conversation)'}
-
-PATIENT'S NEW MESSAGE
-"${symptomText}"
-`;
-
-    const response = await Promise.race([
-      ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        config: { systemInstruction, responseMimeType: 'application/json' },
-        contents: [promptText]
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Gemini request timed out')), 12000))
-    ]);
-
-    const result = JSON.parse(response.text);
-    if (!Array.isArray(result.suggested_replies)) result.suggested_replies = [];
-    result.suggested_replies = result.suggested_replies.slice(0, 3).map(String);
-    return send('gemini_ai', result);
-  } catch (error) {
-    console.error('Gemini error, using local engine:', error.message);
-    return send('nura_local', localAnswer());
-  }
+  const conversational = nura.conversationalReply(intent, symptomText, user, chatHistory);
+  if (conversational) return send('nura_local', conversational);
+  if (categorizeInput(symptomText, chatHistory) === 'off_topic') return send('nura_local', nura.otherReply());
+  return send('nura_local', {
+    ...evaluateLocalTriage(symptomText, patientProfile, chatHistory),
+    suggested_replies: ['It started today', 'It has lasted a few days', 'It is getting worse']
+  });
 };

@@ -5,8 +5,10 @@ import { Button } from '../../../components/ui';
 import Nura from '../../../components/nura/Nura';
 import { bookableSpecialty, stripEmoji } from '../chatStorage';
 import { FormattedText } from './FormattedText';
+import SummaryCard from './SummaryCard';
 import { messageTime } from './time';
 import s from './MessageBubble.module.css';
+import { moodForResult } from './mood';
 
 const URGENCY = {
   high: { label: 'High urgency', text: 'Please get medical care today.', tone: s.urgencyHigh },
@@ -90,7 +92,7 @@ function Extras({ result, onBook, onEmergency, onNearby }) {
   );
 }
 
-function MessageBubble({ message, showAvatar, onBook, onEmergency, onNearby }) {
+function MessageBubble({ message, showAvatar, latest, onBook, onBookSlot, onEmergency, onNearby }) {
   const time = messageTime(message.time);
 
   if (message.sender === 'user') {
@@ -110,14 +112,18 @@ function MessageBubble({ message, showAvatar, onBook, onEmergency, onNearby }) {
   return (
     <div className={`${s.row} ${s.rowAi}`}>
       <div className={s.avatarSlot}>
-        {showAvatar && <Nura size={28} still mood={message.result?.emergency_flag ? 'concerned' : 'idle'} />}
+        {showAvatar && <Nura size={28} still={!latest} mood={moodForResult(message.result)} />}
       </div>
-      <div className={s.stackAi}>
+      <div className={`${s.stackAi} ${message.result?.summary ? s.stackWide : ''}`}>
         <div className={`${s.bubble} ${s.bubbleAi}`}>
           <span className="sr-only">Nura said: </span>
           <FormattedText text={stripEmoji(message.text)} className={s.text} listClassName={s.list} />
         </div>
-        <Extras result={message.result} onBook={onBook} onEmergency={onEmergency} onNearby={onNearby} />
+        {message.result?.summary ? (
+          <SummaryCard summary={message.result.summary} category={message.result.category} onBookSlot={onBookSlot} onEmergency={onEmergency} />
+        ) : (
+          <Extras result={message.result} onBook={onBook} onEmergency={onEmergency} onNearby={onNearby} />
+        )}
         {time && <time className={s.time} dateTime={message.time}>{time}</time>}
       </div>
     </div>

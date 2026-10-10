@@ -6,6 +6,8 @@ import { getMyAppointments } from '../../services/api';
 import { Card, SectionHeader, List, ListItem, Alert, Button, Skeleton } from '../../components/ui';
 import Nura from '../../components/nura/Nura';
 import { loadSessions } from './chatStorage';
+import { useMonitoring } from './monitoring/monitoringStore';
+import CheckInHomeCard from './monitoring/CheckInHomeCard';
 import { slotToDate, formatSlotDate, formatSlotTime } from './care/slotTime';
 import { friendlyError } from './care/errors';
 import styles from './PatientHome.module.css';
@@ -180,6 +182,7 @@ function PatientHome() {
     [sessions]
   );
 
+  const monitoring = useMonitoring(user?.id);
   const firstName = user?.name ? user.name.trim().split(/\s+/)[0] : '';
   const missing = missingProfileFields(user?.medicalProfile);
 
@@ -194,6 +197,11 @@ function PatientHome() {
         <NuraCard className={styles.areaNura} />
 
         <div className={styles.side}>
+          <CheckInHomeCard
+            monitoring={monitoring.data}
+            status={monitoring.status}
+            className={monitoring.data ? styles.areaCheckinActive : styles.areaCheckin}
+          />
           <NextAppointment className={styles.areaAppt} />
 
           {missing.length > 0 && (

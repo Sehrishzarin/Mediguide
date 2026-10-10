@@ -3,6 +3,7 @@
 // switches screens or the route remounts while Nura is typing.
 import { useSyncExternalStore } from 'react';
 import { submitTriageSymptom } from '../../../services/api';
+import { getPosition } from '../../../components/geo';
 import { loadSessions, saveSessions, newId, slimResult, makeTitle, MAX_SESSIONS, MAX_MESSAGES } from '../chatStorage';
 
 const HISTORY_TURNS = 8; // recent turns sent to the server
@@ -47,35 +48,62 @@ const omit = (obj, key) => {
 };
 
 // Add a message to a session (creating it if needed) and move it to the top
-const appendMessage = (userId, sessionId, message, title) => {
+// `extra` merges session fields (e.g. the assessment state from a reply)
+const appendMessage = (userId, sessionId, message, title, extra) => {
   const { sessions } = getState(userId);
   const existing = sessions.find((s) => s.id === sessionId);
   const session = existing
-    ? { ...existing, updatedAt: message.time, messages: [...existing.messages, message].slice(-MAX_MESSAGES) }
-    : { id: sessionId, title: title || 'Conversation', createdAt: message.time, updatedAt: message.time, messages: [message] };
+    ? { ...existing, ...extra, updatedAt: message.time, messages: [...existing.messages, message].slice(-MAX_MESSAGES) }
+    : { id: sessionId, title: title || 'Conversation', createdAt: message.time, updatedAt: message.time, assessment: null, ...extra, messages: [message] };
   setState(userId, { sessions: [session, ...sessions.filter((s) => s.id !== sessionId)].slice(0, MAX_SESSIONS) });
 };
 
 const friendlyError = (err) => {
   if (err?.status === 429) return "You're sending messages quickly. Wait a moment, then try again.";
+  if (err?.status >= 500) return 'Nura is having trouble right now. Please try again in a moment.';
   if (err?.status === 0 || /network|failed to fetch/i.test(err?.message || '')) return 'Nura could not be reached. Check your connection and try again.';
   return err?.message || 'Something went wrong. Please try again.';
 };
 
 let speakingTimer = null;
 
-async function request(userId, sessionId, text, history) {
+// ── Location: fetched lazily once per page, never blocks a message for long ──
+const LOCATION_WAIT_MS = 1200;
+let cachedLocation; // undefined = not asked yet, null = unavailable, { lat, lng } = known
+let locationPromise = null;
+const requestLocation = () => {
+  if (!locationPromise) {
+    locationPromise = getPosition()
+      .then((p) => (p && !p.isDefault && Number.isFinite(p.lat) && Number.isFinite(p.lng) ? { lat: p.lat, lng: p.lng } : null))
+      .catch(() => null)
+      .then((loc) => { cachedLocation = loc; return loc; });
+  }
+  return locationPromise;
+};
+const currentLocation = async () => {
+  if (cachedLocation !== undefined) return cachedLocation;
+  const timeout = new Promise((resolve) => { setTimeout(() => resolve(null), LOCATION_WAIT_MS); });
+  return Promise.race([requestLocation(), timeout]);
+};
+
+// ctx: { history, assessment, answer }
+async function request(userId, sessionId, text, ctx) {
   const st = getState(userId);
   setState(userId, { pending: { ...st.pending, [sessionId]: true }, errors: omit(st.errors, sessionId) });
   try {
-    const result = await submitTriageSymptom(text, history);
+    const location = await currentLocation();
+    const result = await submitTriageSymptom(text, ctx.history, {
+      assessment: ctx.assessment || undefined,
+      answer: ctx.answer || undefined,
+      location: location || undefined
+    });
     appendMessage(userId, sessionId, {
       id: newId(),
       sender: 'ai',
       text: result?.conversational_response || 'Sorry, I could not put together a reply. Could you say that another way?',
       result: slimResult(result),
       time: new Date().toISOString()
-    });
+    }, undefined, { assessment: result?.assessment && typeof result.assessment === 'object' ? result.assessment : null });
     setState(userId, { pending: omit(getState(userId).pending, sessionId), speaking: sessionId });
     clearTimeout(speakingTimer);
     speakingTimer = setTimeout(() => {
@@ -85,27 +113,28 @@ async function request(userId, sessionId, text, history) {
     const now = getState(userId);
     setState(userId, {
       pending: omit(now.pending, sessionId),
-      errors: { ...now.errors, [sessionId]: { text, history, message: friendlyError(err) } }
+      errors: { ...now.errors, [sessionId]: { text, ctx, message: friendlyError(err) } }
     });
   }
 }
 
-// Send a user message. Returns false when the message is empty or a reply is pending.
-export function sendMessage(userId, sessionId, raw) {
+// Send a user message. `answer` ({ id, value }) is set when a structured input was tapped.
+// Returns false when the message is empty or a reply is pending.
+export function sendMessage(userId, sessionId, raw, { answer } = {}) {
   const text = String(raw || '').trim();
   const st = getState(userId);
   if (!text || st.pending[sessionId]) return false;
   const existing = st.sessions.find((s) => s.id === sessionId);
   const history = (existing?.messages || []).slice(-HISTORY_TURNS).map((m) => ({ sender: m.sender, text: m.text }));
   appendMessage(userId, sessionId, { id: newId(), sender: 'user', text, time: new Date().toISOString() }, makeTitle(text));
-  request(userId, sessionId, text, history);
+  request(userId, sessionId, text, { history, assessment: existing?.assessment || null, answer: answer || null });
   return true;
 }
 
 export function retryMessage(userId, sessionId) {
   const st = getState(userId);
   const err = st.errors[sessionId];
-  if (err && !st.pending[sessionId]) request(userId, sessionId, err.text, err.history);
+  if (err && !st.pending[sessionId]) request(userId, sessionId, err.text, err.ctx);
 }
 
 export function deleteSession(userId, sessionId) {
@@ -114,4 +143,16 @@ export function deleteSession(userId, sessionId) {
     sessions: st.sessions.filter((s) => s.id !== sessionId),
     errors: omit(st.errors, sessionId)
   });
+}
+
+// Re-ask Nura about the last user message when no reply was ever received
+// (e.g. the app was closed while she was typing).
+export function resendLast(userId, sessionId) {
+  const st = getState(userId);
+  if (st.pending[sessionId]) return;
+  const session = st.sessions.find((s) => s.id === sessionId);
+  const last = session?.messages[session.messages.length - 1];
+  if (!last || last.sender !== 'user') return;
+  const history = session.messages.slice(0, -1).slice(-HISTORY_TURNS).map((m) => ({ sender: m.sender, text: m.text }));
+  request(userId, sessionId, last.text, { history, assessment: session.assessment || null, answer: null });
 }

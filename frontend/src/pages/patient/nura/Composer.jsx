@@ -7,7 +7,7 @@ import s from './Composer.module.css';
 const SpeechRecognitionApi = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition) : undefined;
 const MAX_HEIGHT = 140;
 
-export default function Composer({ onSend, disabled, onListeningChange, inputRef }) {
+export default function Composer({ onSend, disabled, onListeningChange, inputRef, placeholder = 'Message Nura' }) {
   const [text, setText] = useState('');
   const [listening, setListening] = useState(false);
   const [voiceNote, setVoiceNote] = useState('');
@@ -106,7 +106,7 @@ export default function Composer({ onSend, disabled, onListeningChange, inputRef
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={listening ? 'Listening…' : 'Message Nura'}
+          placeholder={listening ? 'Listening…' : placeholder}
           maxLength={2000}
           enterKeyHint="send"
         />

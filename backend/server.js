@@ -13,6 +13,8 @@ const organizationRoutes = require('./src/routes/organization.routes');
 const slotRoutes = require('./src/routes/slot.routes');
 const fileRoutes = require('./src/routes/file.routes');
 const aiRoutes = require('./src/routes/ai.routes');
+const monitoringRoutes = require('./src/routes/monitoring.routes');
+const { startScheduler } = require('./src/services/monitoring');
 const { notFound, errorHandler } = require('./src/middlewares/error');
 
 const required = ['MONGODB_URI', 'JWT_SECRET'];
@@ -57,6 +59,7 @@ app.use('/api/organizations', organizationRoutes);
 app.use('/api/slots', slotRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/monitoring', monitoringRoutes);
 
 app.get('/', (req, res) => res.send('MediGuide Backend API is active.'));
 
@@ -65,9 +68,17 @@ app.use(errorHandler);
 
 const startServer = async () => {
   await connectDB();
+  startScheduler(); // Nura Check-In escalation timers
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 };
 
 startServer();
+
+// Last-resort guards: log unexpected errors instead of taking the whole API down
+process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', err));
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+  process.exit(1); // let the host (Render/nodemon) restart a clean process
+});

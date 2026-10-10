@@ -32,6 +32,17 @@ function PendingCard({ org, onReview }) {
           <p className={styles.meta}>
             <span className={styles.metaItem}><Stethoscope size={14} aria-hidden="true" />{org.type}</span>
             <span className={styles.metaItem}><MapPin size={14} aria-hidden="true" />{org.address}</span>
+            {Array.isArray(org.location?.coordinates) && (
+              // Let the reviewer check the pin matches the address before approving
+              <a
+                className={styles.metaItem}
+                href={`https://www.google.com/maps/search/?api=1&query=${org.location.coordinates[1]},${org.location.coordinates[0]}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                View location on map
+              </a>
+            )}
           </p>
         </div>
         <Badge tone="warning" icon={Clock}>Pending</Badge>

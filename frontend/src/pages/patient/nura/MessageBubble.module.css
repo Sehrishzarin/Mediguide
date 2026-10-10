@@ -146,3 +146,6 @@
   gap: var(--sp-2);
   margin-top: var(--sp-1);
 }
+
+/* Nura replies that carry an assessment result use the full column */
+.stackWide { flex: 1; max-width: 600px; }

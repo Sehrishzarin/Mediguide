@@ -1,6 +1,6 @@
 // Per-account Nura conversations kept in localStorage.
 // PatientHome reads the same key (via loadSessions) to show recent conversations, so keep the shape stable:
-//   [{ id, title, createdAt, updatedAt?, messages: [{ id, sender: 'user'|'ai', text, result?, time }] }]
+//   [{ id, title, createdAt, updatedAt?, assessment?, messages: [{ id, sender: 'user'|'ai', text, result?, time }] }]
 // Sessions are stored most recently updated first.
 
 const LEGACY_KEY = 'mediguide_ai_chats';
@@ -23,7 +23,9 @@ const clean = (raw) => {
         title: typeof s.title === 'string' && s.title ? s.title : 'Conversation',
         createdAt,
         updatedAt: s.updatedAt || createdAt,
-        messages: s.messages.filter(isMessage).slice(-MAX_MESSAGES)
+        messages: s.messages.filter(isMessage).slice(-MAX_MESSAGES),
+        // In-progress guided assessment state to send back with the next message
+        assessment: s.assessment && typeof s.assessment === 'object' ? s.assessment : null
       };
     })
     .filter((s) => s.messages.length > 0)
@@ -67,6 +69,7 @@ export const previewText = (text) =>
 // Only keep what the UI needs from a Nura reply
 export const slimResult = (r = {}) => ({
   is_non_medical: Boolean(r.is_non_medical),
+  mood: ['idle', 'happy', 'empathetic', 'concerned'].includes(r.mood) ? r.mood : '',
   category: r.category || '',
   specialty: r.specialty || '',
   urgency_level: r.urgency_level || 'none',
@@ -79,8 +82,60 @@ export const slimResult = (r = {}) => ({
   suggested_replies: Array.isArray(r.suggested_replies)
     ? r.suggested_replies.filter((x) => typeof x === 'string' && x.trim()).slice(0, 4)
     : [],
-  cta: r.cta && r.cta.type === 'book' ? { type: 'book', specialty: r.cta.specialty || '' } : null
+  cta: r.cta && r.cta.type === 'book' ? { type: 'book', specialty: r.cta.specialty || '', slotId: r.cta.slotId || '' } : null,
+  input: slimInput(r.input),
+  summary: r.summary && typeof r.summary === 'object' ? slimSummary(r.summary) : null
 });
+
+const strings = (a) => (Array.isArray(a) ? a.filter((x) => typeof x === 'string' && x.trim()) : []);
+
+// A structured answer widget (scale | choice | multi) from a guided assessment
+function slimInput(input) {
+  if (!input || !['scale', 'choice', 'multi'].includes(input.type) || !Array.isArray(input.options)) return null;
+  return {
+    type: input.type,
+    id: String(input.id || ''),
+    question: input.question || '',
+    options: input.options
+      .filter((o) => o && (typeof o.value === 'string' || typeof o.value === 'number'))
+      .map((o) => ({ value: o.value, label: String(o.label ?? o.value) })),
+    noneLabel: input.noneLabel || ''
+  };
+}
+
+const LEVELS = ['emergency', 'urgent', 'soon', 'home'];
+function slimSummary(sm) {
+  const n = sm.nearest;
+  const slot = sm.nextSlot;
+  return {
+    level: LEVELS.includes(sm.level) ? sm.level : 'soon',
+    title: sm.title || '',
+    message: sm.message || '',
+    reasons: strings(sm.reasons),
+    advice: strings(sm.advice),
+    warnings: strings(sm.warnings),
+    medicineNotes: strings(sm.medicineNotes),
+    specialty: sm.specialty || '',
+    symptom: sm.symptom || '',
+    nearest: n && n.name ? {
+      id: n.id || '',
+      name: n.name,
+      type: n.type || '',
+      phone: n.phone || '',
+      address: n.address || '',
+      isPartner: Boolean(n.isPartner),
+      location: n.location && Array.isArray(n.location.coordinates) ? { coordinates: n.location.coordinates.slice(0, 2) } : null,
+      distanceKm: typeof n.distanceKm === 'number' ? n.distanceKm : null
+    } : null,
+    nextSlot: slot && slot.id ? {
+      id: slot.id,
+      doctor: slot.doctor || '',
+      specialty: slot.specialty || '',
+      date: slot.date || '',
+      time: slot.time || ''
+    } : null
+  };
+}
 
 // Specialty values that are not something you can book (e.g. "Self-Care Monitoring")
 const NOT_BOOKABLE = /self[- ]?care|monitor|^none$|^n\/?a$|not applicable|emergency/i;

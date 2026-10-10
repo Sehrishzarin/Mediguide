@@ -2,6 +2,9 @@ const User = require('../models/User');
 const Slot = require('../models/Slot');
 const File = require('../models/File');
 const Organization = require('../models/Organization');
+const CareContact = require('../models/CareContact');
+const Monitoring = require('../models/Monitoring');
+const OutboundMessage = require('../models/OutboundMessage');
 const { asyncHandler, HttpError } = require('../middlewares/error');
 
 // Roles a person may pick for themselves at sign-up. Admin accounts are never self-served.
@@ -139,6 +142,10 @@ exports.deleteAccount = asyncHandler(async (req, res) => {
   await Slot.deleteMany({ organization: { $in: ownedIds } });
   await Organization.deleteMany({ owner: user._id });
   await File.deleteMany({ $or: [{ owner: user._id }, { organization: { $in: ownedIds } }] });
+  // Nura Check-In data
+  await Monitoring.deleteMany({ user: user._id });
+  await CareContact.deleteMany({ owner: user._id });
+  await OutboundMessage.deleteMany({ owner: user._id });
   await user.deleteOne();
 
   res.json({ success: true, message: 'Your account and data have been deleted.' });

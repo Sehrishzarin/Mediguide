@@ -28,6 +28,8 @@ const has = (text, words) => words.some((w) => new RegExp(`\\b${w}\\b`, 'i').tes
 const CRISIS = /\b(suicid\w*|kill (myself|me)|end (my|it all)|want to die|self[- ]?harm|hurt myself|cutting myself|no reason to live)\b/i;
 
 const WELLNESS_TOPICS = {
+  // Checked first: "busy, less sleep, more work" is about workload, not sleep tips
+  busy: ['busy', 'workload', 'deadline', 'deadlines', 'overtime', 'less sleep', 'more work', 'no time', 'working late', 'night shift', 'long hours', 'overworked', 'too much work', 'work more', 'no time to sleep'],
   sleep: ['sleep', 'insomnia', 'sleeping', 'tired all the time', 'can\'t sleep', 'nap'],
   stress: ['stress', 'stressed', 'anxiety', 'anxious', 'panic', 'worried', 'overwhelmed', 'burnout', 'depressed', 'sad', 'low mood'],
   nutrition: ['diet', 'nutrition', 'eat', 'eating', 'food', 'healthy meal', 'sugar', 'protein', 'vitamin', 'vitamins'],
@@ -72,6 +74,7 @@ const firstName = (name) => (name || '').trim().split(/\s+/)[0] || '';
 
 // ── Replies ───────────────────────────────────────────────────────────────
 const crisisReply = () => reply({
+  mood: 'concerned',
   is_non_medical: false,
   category: 'Emotional crisis support',
   urgency_level: 'high',
@@ -85,6 +88,7 @@ const crisisReply = () => reply({
 });
 
 const greetingReply = (user) => reply({
+  mood: 'happy',
   conversational_response:
     `Hi${firstName(user.name) ? ` ${firstName(user.name)}` : ''}, I'm ${NAME}, your MediGuide health assistant.\n\n` +
     `I can help you make sense of symptoms, answer general health questions, explain your medications and help you find the right doctor. What's on your mind today?`,
@@ -103,6 +107,7 @@ const identityReply = () => reply({
 });
 
 const thanksReply = () => reply({
+  mood: 'happy',
   conversational_response: `You're welcome! Take care of yourself. I'm here whenever you need me, and if anything changes or gets worse, just tell me.`,
   suggested_replies: ['I have another question', 'Book a doctor']
 });
@@ -168,28 +173,105 @@ const medicationReply = (text, profile) => {
   });
 };
 
+// Wellness answers come in layers: a first answer, deeper follow-ups, then an open
+// question. Nura never repeats a layer already used in the conversation.
+const hasAsthma = (p) => (p.preExistingConditions || []).some((c) => /asthma/i.test(c));
+const conditionText = (p) => (p.preExistingConditions || []).join(' ').toLowerCase();
+
 const WELLNESS = {
-  sleep: (p) => `Good sleep makes a real difference to how you feel. A few things that help most people:\n\n• Aim for **7–9 hours**, going to bed and waking at the same times\n• Avoid caffeine after mid-afternoon and screens in the last hour\n• Keep the room dark, cool and quiet\n• If you can't sleep after 20 minutes, get up and do something calm\n\nIf poor sleep lasts more than **3 weeks**, or you snore loudly or wake up gasping, it's worth seeing a doctor.${(p.preExistingConditions || []).some((c) => /asthma/i.test(c)) ? '\n\nSince you have asthma, night-time coughing or wheezing can disturb sleep too; mention it to your doctor if it happens often.' : ''}`,
-  stress: () => `I'm sorry things feel heavy. Some quick ways to take the edge off:\n\n• **Box breathing:** breathe in for 4, hold 4, out 4, hold 4. Repeat for 2 minutes\n• A short walk or light stretching\n• Talk to someone you trust\n• Limit caffeine and keep regular meals and sleep\n\nIf stress or low mood lasts more than two weeks or affects daily life, please talk to a doctor or mental health professional. It's a normal, sensible step.`,
-  nutrition: (p) => {
-    const c = (p.preExistingConditions || []).join(' ').toLowerCase();
-    const extra = /diabet/.test(c) ? '\n\nWith diabetes, keep portions of rice, roti and sweets steady and pair carbs with protein or vegetables.'
-      : /hypertension|blood pressure/.test(c) ? '\n\nWith high blood pressure, cutting back on salt, pickles and processed foods helps most.' : '';
-    return `A simple way to eat well is the **plate method**:\n\n• **Half** the plate vegetables or salad\n• **A quarter** protein: daal, eggs, chicken, fish or beans\n• **A quarter** whole grains: brown rice, whole-wheat roti\n• Water instead of sugary drinks; fruit instead of sweets most days${extra}`;
-  },
-  hydration: () => `Most adults need around **8 glasses (2 litres) of water a day**, and more in hot weather or when you're active.\n\nSigns you need more: dark yellow urine, headache, dizziness or a dry mouth. During fever, diarrhoea or vomiting, an **ORS** solution replaces lost salts better than plain water.\n\nSeek care if you can't keep fluids down or feel faint.`,
-  exercise: (p) => `The general target is **150 minutes of moderate activity a week** (like brisk walking, 30 minutes on 5 days) plus muscle-strengthening twice a week.\n\nStart small, warm up, and build up gradually.${(p.preExistingConditions || []).some((c) => /asthma/i.test(c)) ? '\n\nWith asthma, keep your reliever inhaler with you and warm up slowly.' : ''}\n\nStop and seek care if you get chest pain, severe breathlessness or dizziness while exercising.`,
-  weight: (p) => {
-    const bmi = bmiOf(p);
-    return `${bmi ? `Based on your profile, your **BMI is ${bmi.value}**, which is ${bmi.band}.\n\n` : 'Add your height and weight to your profile and I can calculate your BMI.\n\n'}Sustainable change comes from small habits: regular meals, more vegetables and protein, fewer sugary drinks, and daily movement. Losing **0.5–1 kg a week** is a healthy pace.\n\nA doctor can check for causes like thyroid issues if your weight changes without explanation.`;
-  }
+  sleep: [
+    (p) => `Good sleep makes a real difference to how you feel. A few things that help most people:\n\n• Aim for **7–9 hours**, going to bed and waking at the same times\n• Avoid caffeine after mid-afternoon and screens in the last hour\n• Keep the room dark, cool and quiet\n• If you can't sleep after 20 minutes, get up and do something calm\n\nIf poor sleep lasts more than **3 weeks**, or you snore loudly or wake up gasping, it's worth seeing a doctor.${hasAsthma(p) ? '\n\nSince you have asthma, night-time coughing or wheezing can disturb sleep too; mention it to your doctor if it happens often.' : ''}`,
+    () => `Here are a few more things that often help when the basics aren't enough:\n\n• **Wind-down routine:** 30 minutes of the same calm steps each night (dim lights, wash up, read) tells your body it's time to sleep\n• **Morning light:** 10 minutes of daylight soon after waking sets your body clock\n• **Worry list:** jot down tomorrow's tasks before bed so your mind can let go\n• **Heavy meals:** finish them 2–3 hours before bed\n• **Naps:** keep them under 20 minutes and before 3 pm`,
+    () => `We've covered the main sleep habits. To help further, **what's hardest for you right now?** Falling asleep, waking up during the night, waking too early, or simply not having enough time to sleep?`
+  ],
+  busy: [
+    (p, user) => `That sounds like a lot to carry${firstName(user.name) ? `, ${firstName(user.name)}` : ''}. I understand wanting more hours in the day, but **cutting sleep usually backfires**: after a few short nights, focus, memory and mood drop, and mistakes go up, so you get less done, not more.\n\nWhat tends to work better when you're stretched:\n\n• **Protect a minimum of 6–7 hours**, even on busy days\n• **Power nap:** 10–20 minutes in the early afternoon restores alertness without grogginess\n• **Caffeine timing:** have it in the morning and before 2 pm, not late in the day\n• **Work in 50-minute focus blocks** with 5–10 minute breaks\n• Tackle your hardest task when you're most alert`,
+    () => `A few more ideas to get through a demanding stretch without burning out:\n\n• **Plan tomorrow's top 3 tasks** before you finish today\n• **Say no or delegate** anything that isn't essential this week\n• **Eat regular meals**: skipping them causes energy crashes\n• **Move for 5 minutes** every couple of hours: a quick walk wakes your brain up\n• Keep **one evening a week** free to recover\n\nWatch for burnout signs: constant exhaustion, headaches, irritability or trouble sleeping even when you have time. If that's happening, it's worth talking to a doctor.`,
+    () => `It sounds like this busy period is really weighing on you. **How long has it been like this, and how are you feeling day to day?** For example, tired but okay, or exhausted and stressed? I can suggest something more specific.`
+  ],
+  stress: [
+    () => `I'm sorry things feel heavy right now. Some quick ways to take the edge off:\n\n• **Box breathing:** breathe in for 4, hold 4, out 4, hold 4. Repeat for 2 minutes\n• A short walk or light stretching\n• Talk to someone you trust\n• Limit caffeine and keep regular meals and sleep\n\nIf stress or low mood lasts more than two weeks or affects daily life, please talk to a doctor or mental health professional. It's a normal, sensible step.`,
+    () => `A few more things that can help over time:\n\n• **Name it:** writing down what's worrying you makes it feel more manageable\n• **Small wins:** break big problems into one small next step\n• **5-4-3-2-1 grounding** when anxiety spikes: notice 5 things you see, 4 you hear, 3 you can touch, 2 you smell, 1 you taste\n• **Limit news and social media** if they make you feel worse\n• Regular movement, even 20 minutes a day, lowers stress hormones`,
+    () => `Thank you for sharing this with me. **What's been weighing on you most?** Work, family, health, or something else? Talking it through can help me suggest something more useful.`
+  ],
+  nutrition: [
+    (p) => {
+      const c = conditionText(p);
+      const extra = /diabet/.test(c) ? '\n\nWith diabetes, keep portions of rice, roti and sweets steady and pair carbs with protein or vegetables.'
+        : /hypertension|blood pressure/.test(c) ? '\n\nWith high blood pressure, cutting back on salt, pickles and processed foods helps most.' : '';
+      return `A simple way to eat well is the **plate method**:\n\n• **Half** the plate vegetables or salad\n• **A quarter** protein: daal, eggs, chicken, fish or beans\n• **A quarter** whole grains: brown rice, whole-wheat roti\n• Water instead of sugary drinks; fruit instead of sweets most days${extra}`;
+    },
+    () => `Some practical habits that make healthy eating easier:\n\n• **Don't skip breakfast:** eggs, yoghurt or oats keep you full longer\n• **Smart snacks:** fruit, nuts, chana or yoghurt instead of biscuits and chips\n• **Cook a little extra** so tomorrow's lunch is ready\n• **Go easy on fried food** like samosas and parathas: a treat, not a daily habit\n• **Eat slowly:** it takes about 20 minutes to feel full`,
+    () => `**Is there a specific goal you have in mind?** For example more energy, losing weight, managing blood sugar, or eating well on a busy schedule? I can tailor suggestions.`
+  ],
+  hydration: [
+    () => `Most adults need around **8 glasses (2 litres) of water a day**, and more in hot weather or when you're active.\n\nSigns you need more: dark yellow urine, headache, dizziness or a dry mouth. During fever, diarrhoea or vomiting, an **ORS** solution replaces lost salts better than plain water.\n\nSeek care if you can't keep fluids down or feel faint.`,
+    () => `A few easy ways to drink more through the day:\n\n• Keep a **water bottle** on your desk and refill it twice\n• Have a glass with **every meal**\n• Add lemon, mint or cucumber if plain water feels boring\n• Fruits like watermelon and oranges count too\n• Tea and coffee count partly, but they shouldn't be your main source`,
+    () => `**Is something making it hard to drink enough**, like forgetting, being busy, or not liking plain water? Or are you asking because of a symptom like headaches or dizziness?`
+  ],
+  exercise: [
+    (p) => `The general target is **150 minutes of moderate activity a week** (like brisk walking, 30 minutes on 5 days) plus muscle-strengthening twice a week.\n\nStart small, warm up, and build up gradually.${hasAsthma(p) ? '\n\nWith asthma, keep your reliever inhaler with you and warm up slowly.' : ''}\n\nStop and seek care if you get chest pain, severe breathlessness or dizziness while exercising.`,
+    () => `Ways to fit activity into a busy day:\n\n• **Walk** during phone calls or after meals\n• Take the **stairs** instead of the lift\n• **10-minute home workouts:** squats, push-ups against a wall, lunges, planks\n• Stretch for a few minutes every hour if you sit a lot\n• Find something you enjoy, like cricket, badminton or swimming, so it doesn't feel like a chore`,
+    () => `**What would you like exercise to help with?** More energy, weight, strength, stress, or a specific health condition? I can suggest a simple starting plan.`
+  ],
+  weight: [
+    (p) => {
+      const bmi = bmiOf(p);
+      return `${bmi ? `Based on your profile, your **BMI is ${bmi.value}**, which is ${bmi.band}.\n\n` : 'Add your height and weight to your profile and I can calculate your BMI.\n\n'}Sustainable change comes from small habits: regular meals, more vegetables and protein, fewer sugary drinks, and daily movement. Losing **0.5–1 kg a week** is a healthy pace.\n\nA doctor can check for causes like thyroid issues if your weight changes without explanation.`;
+    },
+    () => `A few habits that help most with weight:\n\n• **Sugary drinks** (soft drinks, juices, sweet chai) are the easiest calories to cut\n• **Protein at every meal** keeps you full for longer\n• **Sleep:** short sleep increases hunger hormones\n• **Track** what you eat for a week; it often reveals easy changes\n• Aim for **progress, not perfection**: a slip-up is just one meal`,
+    () => `**What's your goal**: losing weight, gaining weight, or keeping it steady? And is anything making it harder, like a busy schedule or a health condition?`
+  ]
 };
 
-const wellnessReply = (topic, profile) => reply({
-  category: `Wellness: ${topic}`,
-  conversational_response: WELLNESS[topic](profile),
-  suggested_replies: topic === 'stress' ? ['Try a breathing exercise', 'Book a doctor'] : ['More tips', 'Check a symptom']
-});
+// Which layer was the last Nura message (so "more tips" continues the same topic)?
+const LAYER_KEYS = Object.fromEntries(Object.entries(WELLNESS).map(([topic, layers]) =>
+  [topic, layers.map((fn) => fn({}, {}).slice(0, 60))]));
+
+const lastTopicFrom = (history) => {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const m = history[i];
+    if (m.sender !== 'ai') continue;
+    for (const [topic, keys] of Object.entries(LAYER_KEYS)) {
+      if (keys.some((k) => m.text.startsWith(k.slice(0, 24)))) return topic;
+    }
+    return null;
+  }
+  return null;
+};
+
+const wellnessReply = (topic, profile, user, history = [], wantsMore = false) => {
+  const layers = WELLNESS[topic];
+  const said = history.filter((m) => m.sender === 'ai').map((m) => m.text);
+  const used = (i) => said.some((t) => t.startsWith(LAYER_KEYS[topic][i].slice(0, 24)));
+  // An explicit "more" never goes back to the first answer, even if it has scrolled out of the history window
+  const from = wantsMore ? 1 : 0;
+  let index = layers.findIndex((_, i) => i >= from && !used(i));
+  if (index === -1) {
+    // Everything on this topic is covered: invite specifics instead of repeating ourselves
+    return reply({
+      category: `Wellness: ${topic}`,
+      conversational_response: "I've shared my main tips on this for now. If you tell me a little more about your situation, like what you've already tried or what's getting in the way, I can be more specific. If it's affecting your health or daily life, a doctor can help too.",
+      suggested_replies: ['Check a symptom', 'Book a doctor']
+    });
+  }
+  const isLast = index === layers.length - 1;
+  const replies = {
+    sleep: ['More sleep tips', 'I wake up at night', 'I have no time to sleep'],
+    busy: ['More tips', 'I feel exhausted', 'How do I avoid burnout?'],
+    stress: ['More ways to cope', 'Work stress', 'Book a doctor'],
+    nutrition: ['More tips', 'Eating on a busy schedule', 'Managing blood sugar'],
+    hydration: ['More tips', 'I get headaches', 'Check a symptom'],
+    exercise: ['More tips', 'A plan for beginners', 'Exercise for stress'],
+    weight: ['More tips', 'I want to lose weight', 'Book a doctor']
+  }[topic] || ['More tips', 'Check a symptom'];
+  return reply({
+    mood: ['stress', 'busy'].includes(topic) ? 'empathetic' : 'idle',
+    category: `Wellness: ${topic}`,
+    conversational_response: layers[index](profile, user || {}),
+    suggested_replies: isLast ? ['Check a symptom', 'Book a doctor'] : replies
+  });
+};
 
 const otherReply = () => reply({
   conversational_response: `I'm best with health topics: symptoms, medications, sleep, stress, nutrition, exercise or finding care. Could you tell me a bit more about what you'd like help with?`,
@@ -197,8 +279,15 @@ const otherReply = () => reply({
 });
 
 // Returns a reply for conversational intents, or null when the message should go to triage.
-const conversationalReply = (intent, text, user) => {
+const MORE = /^(more|more tips|tell me more|anything else|what else|more \w+ tips|more ways to cope|go on|continue)\b/i;
+
+const conversationalReply = (intent, text, user, history = []) => {
   const profile = (user && user.medicalProfile) || {};
+  // "More tips" continues whichever wellness topic Nura was just talking about
+  if (MORE.test((text || '').trim())) {
+    const topic = lastTopicFrom(history);
+    if (topic) return wellnessReply(topic, profile, user, history, true);
+  }
   switch (intent.type) {
     case 'crisis': return crisisReply();
     case 'greeting': return greetingReply(user || {});
@@ -207,7 +296,7 @@ const conversationalReply = (intent, text, user) => {
     case 'profile': return profileReply(text, profile, user || {});
     case 'appointment': return appointmentReply();
     case 'medication': return medicationReply(text, profile);
-    case 'wellness': return wellnessReply(intent.topic, profile);
+    case 'wellness': return wellnessReply(intent.topic, profile, user, history, MORE.test((text || '').trim()));
     default: return null;
   }
 };

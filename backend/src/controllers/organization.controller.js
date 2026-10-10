@@ -156,6 +156,10 @@ exports.createOrganization = asyncHandler(async (req, res) => {
   const lat = parseFloat(latitude);
   const hasCoords = Number.isFinite(lng) && Number.isFinite(lat);
   if (!hasCoords) throw new HttpError(400, 'Please set the facility location (latitude and longitude).');
+  // Catch typos and swapped fields: latitude must be -85..85 (no poles), longitude -180..180, not 0,0
+  if (Math.abs(lat) > 85 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) {
+    throw new HttpError(400, 'That location does not look right. Use "Use my current location", or check that latitude (e.g. 33.68) and longitude (e.g. 73.04) are not swapped.');
+  }
 
   const isAdmin = req.user.role === 'admin';
   const organization = await Organization.create({

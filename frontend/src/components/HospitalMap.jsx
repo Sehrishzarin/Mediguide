@@ -39,6 +39,9 @@ const FILTERS = [
 
 const PAGE_SIZE = 5;
 
+// Facilities within this distance of the patient are framed on the map
+const FRAME_RADIUS_KM = 30;
+
 const coordsOf = (org) => {
   const [lng, lat] = org?.location?.coordinates || [];
   return typeof lat === 'number' && typeof lng === 'number' ? [lat, lng] : null;
@@ -328,11 +331,18 @@ function HospitalMap({ onSelectBooking }) {
     [orgs, filter]
   );
 
+  // What the map frames: the patient plus facilities near them. Far-away or mis-entered
+  // locations stay in the list (with their distance) but never drag the map off course.
   const points = useMemo(() => {
-    const pts = filtered.map(coordsOf).filter(Boolean);
-    const nearest = filtered[0]?.distanceKm;
-    // Only include the user in the framing when they are reasonably close
-    if (!loc.isDefault && typeof nearest === 'number' && nearest < 60) pts.push([loc.lat, loc.lng]);
+    const valid = filtered.filter((o) => {
+      const c = coordsOf(o);
+      return c && Math.abs(c[0]) <= 85 && Math.abs(c[1]) <= 180;
+    });
+    const close = valid.filter((o) => typeof o.distanceKm === 'number' && o.distanceKm <= FRAME_RADIUS_KM);
+    // Nobody close by (e.g. a different city): frame the 3 nearest instead
+    const framed = close.length ? close : valid.slice(0, 3);
+    const pts = framed.map(coordsOf);
+    if (!loc.isDefault && (close.length || (framed[0]?.distanceKm ?? Infinity) < 60)) pts.push([loc.lat, loc.lng]);
     return pts;
   }, [filtered, loc]);
 

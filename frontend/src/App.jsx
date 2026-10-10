@@ -15,6 +15,9 @@ const Onboarding = lazy(() => import('./pages/patient/Onboarding'));
 const NuraChat = lazy(() => import('./pages/patient/nura/NuraChat'));
 const CareHub = lazy(() => import('./pages/patient/care/CareHub'));
 const Emergency = lazy(() => import('./pages/patient/Emergency'));
+const MonitoringPage = lazy(() => import('./pages/patient/monitoring/MonitoringPage'));
+const MonitoringSetup = lazy(() => import('./pages/patient/monitoring/MonitoringSetup'));
+const ContactPhone = lazy(() => import('./pages/patient/monitoring/ContactPhone'));
 const OrgDashboard = lazy(() => import('./pages/org/OrgDashboard'));
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const NotFound = lazy(() => import('./pages/NotFound'));
@@ -72,6 +75,10 @@ function App() {
                 <Route path="slots" element={<LegacyRedirect to="/patient/care/book" />} />
                 <Route path="appointments" element={<Navigate to="/patient/care/appointments" replace />} />
                 <Route path="emergency" element={<Emergency />} />
+                {/* Nura Check-In: status/check-in, setup, and the demo "contact's phone" */}
+                <Route path="monitoring" element={<MonitoringPage />} />
+                <Route path="monitoring/setup" element={<MonitoringSetup />} />
+                <Route path="monitoring/contact/:id" element={<ContactPhone />} />
               </Route>
             </Route>
           </Route>

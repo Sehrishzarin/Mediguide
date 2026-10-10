@@ -127,8 +127,11 @@
 }
 
 /* Mobile-only bars are hidden on desktop (and then measure 0px) */
-.topBar,
+.topBarWrap,
 .tabBar { display: none; }
+
+/* Check-in banner: in the header on mobile, its own sticky row on desktop */
+.desktopBanner { position: sticky; top: 0; z-index: 400; }
 
 /* SOS control in the mobile top bar */
 .sos {
@@ -161,10 +164,16 @@
   .sidebar { display: none; }
   .main { margin-left: 0; }
 
-  .topBar {
+  .desktopBanner { display: none; }
+
+  .topBarWrap {
+    display: block;
     position: sticky;
     top: 0;
     z-index: 500;
+  }
+
+  .topBar {
     display: flex;
     align-items: center;
     justify-content: space-between;

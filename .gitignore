@@ -1,0 +1,4 @@
+# Built Android packages (share them, don't commit them)
+*.apk
+*.aab
+*.zip

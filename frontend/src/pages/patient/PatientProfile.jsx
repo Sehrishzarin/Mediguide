@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, HeartPulse, Phone, FileText, ShieldCheck, ChevronLeft, LogOut, CheckCircle2, AlertCircle } from 'lucide-react';
+import { User, HeartPulse, Phone, FileText, ShieldCheck, ChevronLeft, LogOut, CheckCircle2, AlertCircle, BellRing } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Avatar, Button, Card, List, ListItem, ProgressBar } from '../../components/ui';
 import friendlyError from '../../utils/friendlyError';
@@ -248,6 +248,14 @@ export default function PatientProfile() {
               <TextField label="Relationship" autoComplete="off" value={draft.ecRelationship} onChange={(v) => set({ ecRelationship: v })} maxLength={LIMITS.relationship} placeholder="e.g. Sister" error={err('ecRelationship')} />
               <TextField label="Contact phone" type="tel" inputMode="tel" autoComplete="off" value={draft.ecPhone} onChange={(v) => set({ ecPhone: v })} error={err('ecPhone')} />
             </div>
+            <List className={styles.checkinLink}>
+              <ListItem
+                icon={BellRing}
+                title="Nura Check-In contacts"
+                subtitle="People Nura alerts if you miss a check-in (up to 3)"
+                to="/patient/monitoring/setup"
+              />
+            </List>
           </Section>
 
           <Section id="reports" title="Test reports" description="PDF, PNG, JPG or WEBP, up to 2 MB each. Only you can see them." current={current === 'reports'} onBack={backToIndex}>
