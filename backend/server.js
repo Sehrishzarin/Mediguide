@@ -28,21 +28,23 @@ const PORT = process.env.PORT || 5000;
 // Needed so rate limiting sees the real client IP behind Vercel/Render/Nginx
 app.set('trust proxy', 1);
 
-// Allowed browser origins: CLIENT_ORIGIN (comma separated) plus the Capacitor shells and local dev
+// Allowed browser origins: CLIENT_ORIGIN (comma separated, e.g. a custom domain), any Vercel
+// deployment (production + preview URLs), the Capacitor app shells and local development.
+// Auth uses bearer tokens (not cookies), so CORS is not the security boundary here.
 const allowedOrigins = [
-  ...(process.env.CLIENT_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean),
-  'http://localhost', 'https://localhost', 'capacitor://localhost',
-  'http://localhost:5173', 'http://127.0.0.1:5173'
+  ...(process.env.CLIENT_ORIGIN || '').split(',').map((s) => s.trim().replace(/\/+$/, '')).filter(Boolean),
+  'http://localhost', 'https://localhost', 'capacitor://localhost'
 ];
-// In development allow any localhost / LAN-IP port (Vite moves to 5174+ when 5173 is busy)
-const isLanDev = (origin) => process.env.NODE_ENV !== 'production' &&
-  /^http:\/\/(localhost|(\d{1,3}\.){3}\d{1,3}):\d+$/.test(origin);
+const isVercel = (origin) => /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.vercel\.app$/i.test(origin);
+// Any localhost / LAN-IP port (Vite dev servers, phones on the same network)
+const isLocalDev = (origin) => /^http:\/\/(localhost|127\.0\.0\.1|(\d{1,3}\.){3}\d{1,3}):\d+$/.test(origin);
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({
   origin: (origin, cb) => {
     // No Origin header = native app / curl / same-origin
-    if (!origin || allowedOrigins.includes(origin) || isLanDev(origin)) return cb(null, true);
+    if (!origin || allowedOrigins.includes(origin) || isVercel(origin) || isLocalDev(origin)) return cb(null, true);
+    console.warn(`CORS blocked origin: ${origin} (add it to CLIENT_ORIGIN)`);
     return cb(null, false);
   }
 }));
