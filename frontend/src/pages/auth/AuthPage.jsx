@@ -61,10 +61,27 @@ export default function AuthPage({ mode }) {
   const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [focus, setFocus] = useState('');      // which field has focus (Nura reacts to it)
+  const [hovering, setHovering] = useState(false);
 
   const errors = validate({ isSignup, name, email, phone, password, confirm });
   const err = (key) => (submitted ? errors[key] : undefined);
   const isOrg = isSignup && role === 'organization';
+
+  // Nura reacts to the form: looks at the field you're typing in, closes her eyes for passwords,
+  // thinks while signing in and looks worried after an error
+  const secret = focus === 'password' || focus === 'confirm';
+  let nuraMood = 'idle';
+  let nuraSays = isSignup ? "Hi! Let's get you set up." : 'Hi, welcome back!';
+  if (loading) { nuraMood = 'thinking'; nuraSays = isSignup ? 'Setting things up…' : 'Checking…'; }
+  else if (serverError) { nuraMood = 'concerned'; nuraSays = "Hmm, let's try that again."; }
+  else if (secret) { nuraMood = 'shy'; nuraSays = "I won't peek!"; }
+  else if (focus) { nuraSays = focus === 'email' ? 'Take your time.' : 'Got it, go ahead.'; }
+  else if (hovering) { nuraMood = 'happy'; nuraSays = 'That tickles!'; }
+  const fieldIndex = ['name', 'email', 'phone', 'password', 'confirm'].indexOf(focus);
+  // Desktop: the form is to Nura's right. Mobile: it's below her.
+  const gazeSide = focus && !secret ? { x: 1, y: -0.3 + Math.max(0, fieldIndex) * 0.2 } : 'pointer';
+  const gazeDown = focus && !secret ? { x: 0.2, y: 1 } : 'pointer';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -102,10 +119,17 @@ export default function AuthPage({ mode }) {
       <aside className={styles.brandPanel} aria-hidden="true">
         <Logo size={36} />
         <div className={styles.brandCenter}>
-          <div className={styles.nuraHalo}>
-            <Nura size={168} mood="happy" />
+          <div className={styles.nuraStage}>
+            <span
+              className={styles.nuraHalo}
+              onPointerEnter={() => setHovering(true)}
+              onPointerLeave={() => setHovering(false)}
+            >
+              <Nura size={168} mood={nuraMood} gaze={gazeSide} />
+            </span>
+            <span key={nuraSays} className={styles.bubble}>{nuraSays}</span>
           </div>
-          <p className={styles.promise}>Care, guided by Nura</p>
+          <p className={styles.promise}>Care, guided by <em className={styles.serif}>Nura</em></p>
           <ul className={styles.benefits}>
             {BENEFITS.map(({ icon: Icon, text }) => (
               <li key={text}>
@@ -131,6 +155,10 @@ export default function AuthPage({ mode }) {
           </div>
 
           <header className={styles.head}>
+            <span className={styles.mobileNura} aria-hidden="true">
+              <Nura size={56} mood={nuraMood} gaze={gazeDown} />
+              <span key={nuraSays} className={styles.mobileBubble}>{nuraSays}</span>
+            </span>
             <h1 className={styles.title}>{isSignup ? 'Create your account' : 'Welcome back'}</h1>
             <p className={styles.subtitle}>
               {isSignup
@@ -140,7 +168,13 @@ export default function AuthPage({ mode }) {
           </header>
 
           <div className={styles.card}>
-            <form onSubmit={handleSubmit} className={styles.form} noValidate>
+            <form
+              onSubmit={handleSubmit}
+              className={styles.form}
+              noValidate
+              onFocusCapture={(e) => setFocus((e.target.id || '').replace('auth-', ''))}
+              onBlurCapture={() => setFocus('')}
+            >
               {isSignup && (
                 <div className={styles.roleGroup}>
                   <span className={styles.groupLabel} id="auth-role-label">I am signing up as</span>
@@ -185,7 +219,7 @@ export default function AuthPage({ mode }) {
                 {serverError && <Alert tone="danger" icon={AlertCircle}>{serverError}</Alert>}
               </div>
 
-              <Button type="submit" size="lg" block loading={loading}>
+              <Button type="submit" size="lg" block loading={loading} className={styles.submit}>
                 {loading ? (isSignup ? 'Creating account' : 'Signing in') : (isSignup ? 'Create account' : 'Sign in')}
               </Button>
             </form>

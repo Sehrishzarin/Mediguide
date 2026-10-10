@@ -152,3 +152,10 @@
 @media (prefers-reduced-motion: reduce) {
   .body, .eye, .talk, .ring, .dots i { animation: none !important; }
 }
+
+/* Gaze: eyes and face glide towards where Nura is looking */
+.gaze {
+  transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1);
+  will-change: transform;
+}
+.blush { opacity: 0.75; transition: opacity 0.3s ease; }

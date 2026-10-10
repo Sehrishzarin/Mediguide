@@ -37,7 +37,7 @@
   gap: var(--sp-6);
 }
 
-/* Nura's soft glow (gradients are reserved for Nura) */
+/* Space around Nura */
 .nuraHalo {
   display: grid;
   place-items: center;
@@ -45,10 +45,7 @@
   height: 240px;
   margin-left: calc(-1 * var(--sp-6));
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 50%,
-    color-mix(in srgb, var(--nura-1) 18%, transparent) 0%,
-    color-mix(in srgb, var(--nura-2) 10%, transparent) 45%,
-    transparent 70%);
+  background: none;
 }
 
 .promise {
@@ -251,4 +248,92 @@
   text-align: center;
   font-size: var(--fs-xs);
   color: var(--text-3);
+}
+
+/* ═════ Warm, premium look shared with the landing page ═════ */
+.page {
+  --cream: #FBF7F1;
+  --ink: #17162B;
+  --ink-2: #4A4862;
+  --mint: #8EE3CF;
+  --lav: #B9A8F6;
+  --peach: #FFBDA3;
+  --teal: #0E9F8B;
+  --coral: #EF7B60;
+  --spring: cubic-bezier(0.22, 1, 0.36, 1);
+  background: var(--cream);
+}
+
+@media (min-width: 960px) {
+  .brandPanel {
+    position: sticky;
+    overflow: hidden;
+    background: #F6F0E7;
+    border-right: 1px solid rgba(23, 22, 43, 0.07);
+  }
+}
+
+
+/* Nura with a speech bubble that reacts to the form */
+.nuraStage { position: relative; display: flex; align-items: flex-start; gap: 4px; }
+.nuraHalo {
+  cursor: pointer;
+  transition: transform 0.4s var(--spring);
+}
+.nuraHalo:hover { transform: scale(1.04) rotate(-3deg); }
+.bubble {
+  position: relative;
+  margin-top: 28px;
+  padding: 10px 16px;
+  border-radius: 18px 18px 18px 6px;
+  background: #fff;
+  box-shadow: 0 14px 30px -18px rgba(23, 22, 43, 0.45);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  animation: bubbleIn 0.45s var(--spring) both;
+}
+@keyframes bubbleIn { from { opacity: 0; transform: translateY(6px) scale(0.92); } to { opacity: 1; transform: none; } }
+
+.promise { color: var(--ink); font-size: clamp(30px, 3vw, 40px); letter-spacing: -0.03em; font-weight: 650; }
+.serif {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--teal);
+  padding-right: 0.08em;
+  margin-right: -0.06em;
+}
+.benefits li { color: var(--ink-2); }
+.benefitIcon { background: rgba(255, 255, 255, 0.7); color: var(--teal); box-shadow: 0 6px 16px -10px rgba(23, 22, 43, 0.35); }
+
+/* Form side */
+.title { color: var(--ink); letter-spacing: -0.03em; }
+.card {
+  background: #fff;
+  border-color: rgba(23, 22, 43, 0.07);
+  box-shadow: 0 30px 60px -40px rgba(23, 22, 43, 0.35);
+  animation: cardIn 0.6s var(--spring) both;
+}
+@keyframes cardIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.submit { background: var(--ink); border-radius: 999px; box-shadow: 0 10px 24px -12px rgba(23, 22, 43, 0.6); transition: transform 0.25s var(--spring), box-shadow 0.25s var(--spring), background-color 0.2s ease; }
+.submit:hover:not(:disabled) { background: #26244A; transform: translateY(-1px); box-shadow: 0 16px 30px -14px rgba(23, 22, 43, 0.65); }
+
+/* Mobile: a small Nura above the title (the brand panel is hidden) */
+.mobileNura { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.mobileBubble {
+  padding: 8px 12px;
+  border-radius: 14px 14px 14px 4px;
+  background: #fff;
+  box-shadow: 0 10px 24px -16px rgba(23, 22, 43, 0.45);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  animation: bubbleIn 0.45s var(--spring) both;
+}
+@media (min-width: 960px) { .mobileNura { display: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble, .mobileBubble, .card { animation: none; }
 }
